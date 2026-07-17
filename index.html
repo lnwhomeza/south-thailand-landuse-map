@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>South Thailand – Land Use Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+/* ══════════════ Reset & Base ══════════════ */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg0:#0f1117; --bg1:#171b26; --bg2:#1e2336; --bg3:#252d42;
+  --bg4:#2d3650; --border:#2e3856; --border2:#3d4f72;
+  --text0:#f0f2ff; --text1:#c8cfe8; --text2:#8a95b8; --text3:#556080;
+  --accent:#4f8ef7; --accent2:#3a78e0; --success:#3ecf8e;
+  --warn:#f59f00; --danger:#f03e3e; --info:#339af0;
+  --radius:10px; --radius-sm:6px; --shadow:0 8px 32px rgba(0,0,0,.45)
+}
+html,body{height:100%;overflow:hidden;font-family:'Noto Sans Thai','Inter',sans-serif;background:var(--bg0);color:var(--text1)}
+
+/* ══════════════ Layout ══════════════ */
+body{display:flex}
+#sidebar{
+  width:310px;min-width:260px;background:var(--bg1);
+  display:flex;flex-direction:column;overflow:hidden;
+  border-right:1px solid var(--border);
+  box-shadow:4px 0 24px rgba(0,0,0,.4);z-index:900
+}
+#map{flex:1;position:relative}
+
+/* ══════════════ Sidebar Header ══════════════ */
+#sb-header{
+  padding:18px 18px 14px;background:linear-gradient(135deg,#1e2a4a,#1a2038);
+  border-bottom:1px solid var(--border);flex-shrink:0
+}
+#sb-title{font-size:16px;font-weight:700;color:var(--text0);letter-spacing:.4px;margin-bottom:2px}
+#sb-sub{font-size:11px;color:var(--text3);font-weight:300}
+
+/* ══════════════ Scrollable body ══════════════ */
+#sb-body{flex:1;overflow-y:auto;padding-bottom:16px}
+#sb-body::-webkit-scrollbar{width:4px}
+#sb-body::-webkit-scrollbar-track{background:transparent}
+#sb-body::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px}
+
+/* ══════════════ Section titles ══════════════ */
+.sec-hd{
+  display:flex;align-items:center;gap:8px;
+  padding:14px 18px 7px;font-size:10px;font-weight:600;
+  text-transform:uppercase;letter-spacing:1.4px;color:var(--text3)
+}
+.sec-hd::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ══════════════ Collapsible layer group ══════════════ */
+.group-wrap{margin:5px 12px 0}
+.group-toggle-btn{
+  width:100%;display:flex;align-items:center;gap:8px;
+  padding:9px 10px;background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--radius);color:var(--text1);font-family:inherit;
+  font-size:12.5px;font-weight:600;cursor:pointer;transition:border-color .2s
+}
+.group-toggle-btn:hover{border-color:var(--border2)}
+.group-toggle-btn.open{border-radius:var(--radius) var(--radius) 0 0;border-color:var(--border2)}
+.group-chevron{display:inline-block;transition:transform .2s;color:var(--text3);font-size:10px}
+.group-toggle-btn.open .group-chevron{transform:rotate(90deg)}
+.group-count{margin-left:auto;font-size:10px;color:var(--text3);font-weight:400}
+.group-body{
+  max-height:0;overflow:hidden;transition:max-height .3s ease;
+  border:1px solid var(--border);border-top:0;border-radius:0 0 var(--radius) var(--radius)
+}
+.group-body.open{max-height:900px}
+.group-body .layer-card{margin:5px 8px}
+.group-body .layer-card:last-child{margin-bottom:8px}
+
+/* ══════════════ Base map pills ══════════════ */
+.base-wrap{display:flex;gap:6px;padding:4px 18px 10px}
+.base-pill{
+  flex:1;padding:6px 4px;text-align:center;border:1px solid var(--border2);
+  border-radius:20px;cursor:pointer;font-size:11px;color:var(--text2);
+  background:var(--bg2);transition:all .2s;user-select:none
+}
+.base-pill.active,.base-pill:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+.base-pill input{display:none}
+
+/* ══════════════ Layer card ══════════════ */
+.layer-card{
+  margin:5px 12px;background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden;transition:border-color .2s
+}
+.layer-card.active{border-color:var(--accent)}
+.layer-card:hover{border-color:var(--border2)}
+
+.lc-head{
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:10px 12px 8px;cursor:default
+}
+.lc-title-row{display:flex;align-items:center;gap:8px;flex:1 1 140px;min-width:140px}
+.lc-icon{font-size:16px;flex-shrink:0;line-height:1}
+.lc-dot{
+  width:9px;height:9px;border-radius:50%;background:var(--text3);
+  flex-shrink:0;transition:background .3s
+}
+.layer-card.active .lc-dot{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+.lc-name{flex:1;font-size:13px;font-weight:500;color:var(--text1);line-height:1.4}
+.lc-actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0}
+.lc-toggle{
+  width:38px;height:20px;background:var(--bg4);border-radius:10px;
+  position:relative;cursor:pointer;transition:background .25s;flex-shrink:0
+}
+.lc-toggle.on{background:var(--accent)}
+.lc-toggle::after{
+  content:'';width:16px;height:16px;background:#fff;border-radius:50%;
+  position:absolute;top:2px;left:2px;transition:left .25s;
+  box-shadow:0 1px 4px rgba(0,0,0,.3)
+}
+.lc-toggle.on::after{left:20px}
+
+/* Opacity slider row */
+.op-row{display:flex;align-items:center;gap:10px;padding:0 12px 6px;font-size:11px;color:var(--text3)}
+.op-row input[type=range]{
+  flex:1;-webkit-appearance:none;height:3px;border-radius:2px;
+  background:var(--bg4);outline:none;cursor:pointer
+}
+.op-row input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+  background:var(--accent);cursor:pointer;box-shadow:0 0 4px rgba(79,142,247,.5)
+}
+.op-val{width:30px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* Edit btn */
+.cls-toggle-btn{
+  padding:2px 9px;background:transparent;border:1px solid var(--border2);
+  color:var(--text3);border-radius:20px;cursor:pointer;font-size:10px;
+  font-family:inherit;transition:all .2s;margin-left:2px
+}
+.cls-toggle-btn:hover,.cls-toggle-btn.open{border-color:var(--accent);color:var(--accent)}
+
+/* Class editor panel */
+.cls-panel{
+  max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--bg1);
+  border-top:0px solid var(--border)
+}
+.cls-panel.open{max-height:300px;border-top:1px solid var(--border)}
+.cls-inner{padding:8px 12px 10px}
+
+.cls-legend-header{
+  font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;
+  padding:2px 0 6px;margin-bottom:4px;border-bottom:1px solid var(--border)
+}
+.cls-row{display:flex;align-items:center;gap:8px;padding:4px 0}
+.cls-num{
+  width:18px;font-size:11px;color:var(--text3);text-align:right;flex-shrink:0
+}
+.cls-swatch{
+  width:22px;height:22px;border-radius:5px;cursor:pointer;
+  border:2px solid rgba(255,255,255,.15);flex-shrink:0;
+  position:relative;overflow:hidden;transition:transform .15s
+}
+.cls-swatch:hover{transform:scale(1.15)}
+.cls-swatch input[type=color]{
+  position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%
+}
+.cls-label-inp{
+  flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text1);
+  padding:4px 8px;border-radius:var(--radius-sm);font-size:11px;font-family:inherit
+}
+.cls-label-inp:focus{outline:none;border-color:var(--accent);background:var(--bg4)}
+
+/* ══════════════ Boundary toggle rows ══════════════ */
+.bound-row{
+  display:flex;align-items:center;gap:10px;margin:5px 12px;padding:9px 12px;
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius)
+}
+.bound-swatch-wrap{position:relative;cursor:pointer;flex-shrink:0;transition:transform .15s}
+.bound-swatch-wrap:hover{transform:scale(1.15)}
+.bound-swatch{
+  display:block;width:22px;height:22px;border-radius:5px;pointer-events:none;
+  border:2px solid rgba(255,255,255,.15)
+}
+.bound-cp{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.bound-name{flex:1;font-size:13px;color:var(--text1)}
+
+/* ══════════════ Grid info box ══════════════ */
+.grid-info-box{
+  margin:5px 12px 0;background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--radius);padding:10px 13px;font-size:12px;color:var(--text2);
+  line-height:1.7
+}
+.grid-info-box .icon{font-size:16px;margin-right:4px;vertical-align:middle}
+.grid-hint{font-size:11px;color:var(--text3);margin-top:3px}
+
+/* ══════════════ Loading overlay ══════════════ */
+#loading{
+  position:fixed;inset:0;background:rgba(10,12,20,.9);z-index:9999;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  backdrop-filter:blur(4px)
+}
+#loading.hidden{display:none}
+.spinner{
+  width:44px;height:44px;border:3px solid var(--bg4);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .7s linear infinite;margin-bottom:16px
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+#load-msg{font-size:13px;color:var(--text2);letter-spacing:.3px}
+
+/* ══════════════ Popup ══════════════ */
+.leaflet-popup-content-wrapper{
+  background:var(--bg1)!important;border:1px solid var(--border2)!important;
+  border-radius:12px!important;box-shadow:var(--shadow)!important;padding:0!important
+}
+.leaflet-popup-content{margin:0!important;min-width:220px}
+.leaflet-popup-tip-container{display:none}
+.leaflet-popup-close-button{color:var(--text3)!important;top:10px!important;right:10px!important;font-size:18px!important}
+
+.gpopup-wrap{padding:14px 16px 14px;min-width:340px}
+.gpopup-title{
+  font-size:13px;font-weight:600;color:var(--text0);
+  display:flex;align-items:center;gap:8px;margin-bottom:12px;
+  padding-bottom:9px;border-bottom:1px solid var(--border)
+}
+.gpopup-title .coord{font-size:10px;color:var(--text3);font-weight:400}
+.gp-table{width:100%;border-collapse:collapse}
+.gp-table tr{transition:background .15s}
+.gp-table tr:hover{background:rgba(255,255,255,.03)}
+.gp-table td{padding:5px 4px;vertical-align:middle}
+.gp-field{
+  font-size:11px;font-weight:600;color:var(--text3);white-space:nowrap;
+  padding-right:14px!important;width:55%
+}
+.badge{
+  display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
+  border-radius:20px;color:#fff;font-weight:600;font-size:11px;
+  white-space:nowrap
+}
+.badge-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.6);flex-shrink:0}
+.gp-suit-box{
+  margin-top:6px;padding:6px 10px 2px;border:1px solid var(--border);border-radius:8px;
+  background:rgba(255,255,255,.02)
+}
+.gp-table-sm .gp-field{font-size:10px}
+.gp-table-sm .badge{font-size:10px;padding:2px 8px}
+
+/* ══════════════ Status bar ══════════════ */
+#statusbar{
+  position:absolute;bottom:0;right:0;z-index:800;
+  background:rgba(15,17,23,.75);backdrop-filter:blur(4px);
+  color:var(--text3);font-size:11px;padding:4px 12px;
+  border-top-left-radius:8px;font-variant-numeric:tabular-nums;
+  border-left:1px solid var(--border);border-top:1px solid var(--border)
+}
+
+/* ══════════════ Mobile / tablet layout ══════════════ */
+#sidebar-toggle{display:none}
+#sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:940}
+
+@media (max-width:860px){
+  #sidebar-toggle{
+    display:flex;align-items:center;justify-content:center;
+    position:fixed;bottom:18px;left:16px;z-index:1000;
+    width:46px;height:46px;border-radius:50%;background:var(--bg2);
+    border:1px solid var(--border2);color:var(--text0);font-size:20px;
+    font-family:inherit;padding:0;-webkit-appearance:none;appearance:none;
+    cursor:pointer;box-shadow:var(--shadow)
+  }
+  #sidebar{
+    position:fixed;top:0;left:0;bottom:0;z-index:950;
+    width:85vw;max-width:320px;min-width:0;
+    transform:translateX(-100%);transition:transform .25s ease
+  }
+  body.sidebar-open #sidebar{transform:translateX(0)}
+  body.sidebar-open #sidebar-backdrop{display:block}
+  #map{width:100%}
+  .gpopup-wrap{min-width:0;width:min(320px,calc(100vw - 56px))}
+  #statusbar{font-size:10px;padding:3px 8px}
+}
+
+@media (max-width:420px){
+  .gpopup-wrap{padding:12px 14px 12px}
+  .lc-toggle{width:36px;height:19px}
+}
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div><div id="load-msg">กำลังเริ่มต้น...</div></div>
+
+<button id="sidebar-toggle" aria-label="เปิด/ปิดเมนู">☰</button>
+<div id="sidebar-backdrop"></div>
+
+<!-- ═══════ SIDEBAR ═══════ -->
+<div id="sidebar">
+  <div id="sb-header">
+    <div id="sb-title">🗺 ศักยภาพการใช้ที่ดิน (ภาคใต้)</div>
+    <div id="sb-sub">Made by Hommie</div>
+  </div>
+
+  <div id="sb-body">
+    <!-- Base map -->
+    <div class="sec-hd">Base Map</div>
+    <div class="base-wrap" id="base-wrap">
+      <label class="base-pill active"><input type="radio" name="base" value="osm" checked>🗺 OSM</label>
+      <label class="base-pill"><input type="radio" name="base" value="carto">🌑 Dark</label>
+      <label class="base-pill"><input type="radio" name="base" value="sat">🛰 Satellite</label>
+    </div>
+
+    <!-- Raster layers (injected by JS) -->
+    <div class="sec-hd">Raster Layers</div>
+    <div id="layer-list"></div>
+
+    <!-- Admin boundaries -->
+    <div class="sec-hd">เขตการปกครอง</div>
+    <div id="bound-list"></div>
+
+    <!-- Grid info -->
+    <div class="sec-hd">Grid 200m</div>
+    <div class="grid-info-box">
+      <span class="icon">📌</span><b>คลิกที่ใดก็ได้บนแผนที่</b> เพื่อดูข้อมูลกริด 200m
+      <div class="grid-hint">แสดง LU, Consistency และ WO ทั้ง 4 ประเภท</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MAP ═══════ -->
+<div id="map"></div>
+<div id="statusbar">lat: –  lng: –</div>
+
+<!-- ═══════ SCRIPTS ═══════ -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.js"></script>
+<script src="https://unpkg.com/georaster-layer-for-leaflet@3.10.0/dist/georaster-layer-for-leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+//  Layer configuration  (สีและ label แก้ได้ใน sidebar)
+// ─────────────────────────────────────────────────────────────────────────────
+const LAYERS = [
+  { id:'LU_classify', title:'การใช้ที่ดินปัจจุบัน', icon:'🏞',
+    file:'data/LU_classify.tif', opacity:0.80,
+    classes:{
+      1:{color:'#8bc34a',label:'เกษตรกรรม'},
+      2:{color:'#27ae60',label:'ป่าไม้'},
+      3:{color:'#7f8c8d',label:'อื่นๆ'},
+      4:{color:'#5e2a7e',label:'อุตสาหกรรม'},
+      5:{color:'#f48fb1',label:'เมือง/ชุมชน'},
+      6:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
+    }
+  },
+  { id:'LU_Consistency', title:'ความสอดคล้อง', icon:'🔄',
+    file:'data/LU_Consistency.tif', opacity:0.80,
+    classes:{
+      1:{color:'#2ecc71',label:'เหมือนกัน'},
+      2:{color:'#e74c3c',label:'ไม่เหมือนกัน'},
+      3:{color:'#95a5a6',label:'อื่นๆ'},
+      4:{color:'#3498db',label:'น้ำ / ชุ่มน้ำ'},
+    }
+  },
+  { id:'Alloc_LU', title:'ความเหมาะสมรวม', icon:'📋',
+    file:'data/Alloc_LU.tif', opacity:0.80,
+    classes:{
+      1:{color:'#27ae60',label:'ป่าไม้'},
+      2:{color:'#8bc34a',label:'เกษตรกรรม'},
+      3:{color:'#f48fb1',label:'เมือง/ชุมชน'},
+      4:{color:'#5e2a7e',label:'อุตสาหกรรม'},
+    }
+  },
+  { id:'WO_Forest', title:'ระดับความเหมาะสม ป่าไม้', icon:'🌲', group:'suit',
+    file:'data/WO_Forest.tif', opacity:0.75,
+    classes:{
+      1:{color:'#d9534f',label:'เหมาะสมน้อย'},
+      2:{color:'#f1c40f',label:'เหมาะสมปานกลาง'},
+      3:{color:'#8bc34a',label:'เหมาะสมมาก'},
+      4:{color:'#1e8449',label:'เหมาะสมมากที่สุด'},
+    }
+  },
+  { id:'WO_Agri', title:'ระดับความเหมาะสม เกษตร', icon:'🌾', group:'suit',
+    file:'data/WO_Agri.tif', opacity:0.75,
+    classes:{
+      1:{color:'#d9534f',label:'เหมาะสมน้อย'},
+      2:{color:'#f1c40f',label:'เหมาะสมปานกลาง'},
+      3:{color:'#8bc34a',label:'เหมาะสมมาก'},
+      4:{color:'#1e8449',label:'เหมาะสมมากที่สุด'},
+    }
+  },
+  { id:'WO_Community', title:'ระดับความเหมาะสม ชุมชน', icon:'🏘', group:'suit',
+    file:'data/WO_Community.tif', opacity:0.75,
+    classes:{
+      1:{color:'#d9534f',label:'เหมาะสมน้อย'},
+      2:{color:'#f1c40f',label:'เหมาะสมปานกลาง'},
+      3:{color:'#8bc34a',label:'เหมาะสมมาก'},
+      4:{color:'#1e8449',label:'เหมาะสมมากที่สุด'},
+    }
+  },
+  { id:'WO_Industrial', title:'ระดับความเหมาะสม อุตสาหกรรม', icon:'🏭', group:'suit',
+    file:'data/WO_Industrial.tif', opacity:0.75,
+    classes:{
+      1:{color:'#d9534f',label:'เหมาะสมน้อย'},
+      2:{color:'#f1c40f',label:'เหมาะสมปานกลาง'},
+      3:{color:'#8bc34a',label:'เหมาะสมมาก'},
+      4:{color:'#1e8449',label:'เหมาะสมมากที่สุด'},
+    }
+  },
+  { id:'Incons_Forest', title:'ศักยภาพการใช้ที่ดิน ป่าไม้', icon:'🌲', group:'incons',
+    file:'data/Inconsistency_Forest.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
+    classes:{
+      1:{color:'#8bc34a',label:'เกษตรกรรม'},
+      3:{color:'#7f8c8d',label:'อื่นๆ'},
+      4:{color:'#5e2a7e',label:'อุตสาหกรรม'},
+      5:{color:'#f48fb1',label:'เมือง/ชุมชน'},
+      6:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
+    }
+  },
+  { id:'Incons_Agri', title:'ศักยภาพการใช้ที่ดิน เกษตร', icon:'🌾', group:'incons',
+    file:'data/Inconsistency_Agri.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
+    classes:{
+      2:{color:'#27ae60',label:'ป่าไม้'},
+      3:{color:'#7f8c8d',label:'อื่นๆ'},
+      4:{color:'#5e2a7e',label:'อุตสาหกรรม'},
+      5:{color:'#f48fb1',label:'เมือง/ชุมชน'},
+      6:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
+    }
+  },
+  { id:'Incons_Urban', title:'ศักยภาพการใช้ที่ดิน ชุมชน', icon:'🏘', group:'incons',
+    file:'data/Inconsistency_Urban.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
+    classes:{
+      1:{color:'#8bc34a',label:'เกษตรกรรม'},
+      2:{color:'#27ae60',label:'ป่าไม้'},
+      3:{color:'#7f8c8d',label:'อื่นๆ'},
+      4:{color:'#5e2a7e',label:'อุตสาหกรรม'},
+      6:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
+    }
+  },
+  { id:'Incons_Industrial', title:'ศักยภาพการใช้ที่ดิน อุตสาหกรรม', icon:'🏭', group:'incons',
+    file:'data/Inconsistency_Industrial.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
+    classes:{
+      1:{color:'#8bc34a',label:'เกษตรกรรม'},
+      2:{color:'#27ae60',label:'ป่าไม้'},
+      3:{color:'#7f8c8d',label:'อื่นๆ'},
+      5:{color:'#f48fb1',label:'เมือง/ชุมชน'},
+      6:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
+    }
+  },
+];
+const GROUP_TITLES = { suit:'ระดับความเหมาะสม', incons:'ความไม่สอดคล้อง' };
+
+// Popup label/color maps
+const LU_LBL   ={0:'–',1:'เกษตรกรรม',2:'ป่าไม้',3:'อื่นๆ',4:'อุตสาหกรรม',5:'เมือง/ชุมชน',6:'พื้นที่ชุ่มน้ำ'};
+const CONS_LBL ={0:'–',1:'เหมือนกัน',2:'ไม่เหมือนกัน',3:'อื่นๆ',4:'น้ำ/ชุ่มน้ำ'};
+const WO_LBL   ={0:'–',1:'เหมาะสมน้อย',2:'เหมาะสมปานกลาง',3:'เหมาะสมมาก',4:'เหมาะสมมากที่สุด'};
+const ALLOC_LBL={0:'–',1:'ป่าไม้',2:'เกษตรกรรม',3:'เมือง/ชุมชน',4:'อุตสาหกรรม'};
+const LU_CLR   ={1:'#8bc34a',2:'#27ae60',3:'#7f8c8d',4:'#5e2a7e',5:'#f48fb1',6:'#2980b9'};
+const CONS_CLR ={1:'#2ecc71',2:'#e74c3c',3:'#95a5a6',4:'#3498db'};
+const WO_CLR   ={1:'#d9534f',2:'#f1c40f',3:'#8bc34a',4:'#1e8449'};
+const ALLOC_CLR={1:'#27ae60',2:'#8bc34a',3:'#f48fb1',4:'#5e2a7e'};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  EPSG:32647
+// ─────────────────────────────────────────────────────────────────────────────
+proj4.defs('EPSG:32647','+proj=utm +zone=47 +datum=WGS84 +units=m +no_defs');
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Leaflet map
+// ─────────────────────────────────────────────────────────────────────────────
+const map = L.map('map',{center:[8.5,100.0],zoom:8,zoomControl:true,
+  preferCanvas:false});
+
+// Mobile/tablet: sidebar becomes a slide-in drawer (see @media rules), toggled here
+const sbToggle=document.getElementById('sidebar-toggle');
+const sbBackdrop=document.getElementById('sidebar-backdrop');
+function closeSidebar(){document.body.classList.remove('sidebar-open');setTimeout(()=>map.invalidateSize(),260);}
+function openSidebar(){document.body.classList.add('sidebar-open');setTimeout(()=>map.invalidateSize(),260);}
+sbToggle.addEventListener('click',()=>{
+  document.body.classList.contains('sidebar-open')?closeSidebar():openSidebar();
+});
+sbBackdrop.addEventListener('click',closeSidebar);
+
+const baseTiles={
+  osm:   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+           {attribution:'© OpenStreetMap',maxZoom:19}),
+  carto: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+           {attribution:'© CartoDB',maxZoom:19}),
+  sat:   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+           {attribution:'© Esri',maxZoom:19}),
+};
+baseTiles.osm.addTo(map);
+
+// Base map pill switch
+document.getElementById('base-wrap').querySelectorAll('.base-pill').forEach(el=>{
+  el.addEventListener('click',()=>{
+    document.querySelectorAll('.base-pill').forEach(p=>p.classList.remove('active'));
+    el.classList.add('active');
+    const val=el.querySelector('input').value;
+    Object.values(baseTiles).forEach(l=>map.removeLayer(l));
+    baseTiles[val].addTo(map);
+  });
+});
+
+map.on('mousemove',e=>{
+  document.getElementById('statusbar').textContent=
+    `lat: ${e.latlng.lat.toFixed(5)}  ·  lng: ${e.latlng.lng.toFixed(5)}`;
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Raster layer state
+// ─────────────────────────────────────────────────────────────────────────────
+const rastCache={}, geoLayers={}, layerOn={}, layerOp={};
+
+function makeColorFn(id){
+  const cfg=LAYERS.find(l=>l.id===id);
+  return vals=>{
+    const v=vals[0];
+    if(!v) return null;
+    return cfg.classes[v]?.color||null;
+  };
+}
+
+function buildGeoLayer(id){
+  const gr=rastCache[id];
+  const cfg=LAYERS.find(l=>l.id===id);
+  if(!gr) return null;
+  return new GeoRasterLayer({
+    georaster:gr,
+    pixelValuesToColorFn:makeColorFn(id),
+    opacity:layerOp[id]??0.75,
+    resolution:256,
+  });
+}
+
+function refreshLayer(id){
+  const was=layerOn[id];
+  if(geoLayers[id]) map.removeLayer(geoLayers[id]);
+  geoLayers[id]=buildGeoLayer(id);
+  if(was&&geoLayers[id]) geoLayers[id].addTo(map);
+}
+
+async function ensureLoaded(id){
+  if(rastCache[id]) return true;
+  const cfg=LAYERS.find(l=>l.id===id);
+  setLoading(true,`โหลด ${cfg.title}...`);
+  try{
+    const r=await fetch(cfg.file);
+    if(!r.ok) throw new Error(r.status);
+    rastCache[id]=await parseGeoraster(await r.arrayBuffer());
+    return true;
+  }catch(e){
+    alert(`ไม่พบไฟล์ ${cfg.file}\nกรุณารัน prepare_web.py ก่อน`);
+    return false;
+  }finally{setLoading(false)}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Sidebar builder
+// ─────────────────────────────────────────────────────────────────────────────
+function buildSidebar(){
+  const list=document.getElementById('layer-list');
+  list.innerHTML='';
+  const groups={};
+  LAYERS.forEach(cfg=>{
+    layerOn[cfg.id]=false;
+    layerOp[cfg.id]=cfg.opacity??0.75;
+
+    const card=document.createElement('div');
+    card.className='layer-card';
+    card.id='card-'+cfg.id;
+
+    // class rows html
+    const clsHtml=Object.entries(cfg.classes).map(([k,v])=>`
+      <div class="cls-row">
+        <span class="cls-num">${k}</span>
+        <label class="cls-swatch" style="background:${v.color}" title="เลือกสี">
+          <input type="color" value="${v.color}" data-id="${cfg.id}" data-k="${k}" class="cp">
+        </label>
+        <input type="text" class="cls-label-inp" value="${v.label}"
+               data-id="${cfg.id}" data-k="${k}" placeholder="ชื่อ class">
+      </div>`).join('');
+
+    card.innerHTML=`
+      <div class="lc-head">
+        <div class="lc-title-row">
+          <span class="lc-icon">${cfg.icon}</span>
+          <div class="lc-dot"></div>
+          <span class="lc-name">${cfg.title}</span>
+        </div>
+        <div class="lc-actions">
+          <button class="cls-toggle-btn" data-id="${cfg.id}">รายละเอียด ▾</button>
+          <div class="lc-toggle" data-id="${cfg.id}"></div>
+        </div>
+      </div>
+      <div class="op-row">
+        <span>ความทึบ</span>
+        <input type="range" min="0" max="100" value="${Math.round(cfg.opacity*100)}"
+               class="op-sl" data-id="${cfg.id}">
+        <span class="op-val">${Math.round(cfg.opacity*100)}%</span>
+      </div>
+      <div class="cls-panel" id="cp-${cfg.id}">
+        <div class="cls-inner">${cfg.legendHeader?`<div class="cls-legend-header">${cfg.legendHeader}</div>`:''}${clsHtml}</div>
+      </div>
+    `;
+    let parent=list;
+    if(cfg.group){
+      if(!groups[cfg.group]){
+        const count=LAYERS.filter(l=>l.group===cfg.group).length;
+        const wrap=document.createElement('div');
+        wrap.className='group-wrap';
+        const head=document.createElement('button');
+        head.type='button';
+        head.className='group-toggle-btn';
+        head.innerHTML=`<span class="group-chevron">▸</span><span>${GROUP_TITLES[cfg.group]||cfg.group}</span><span class="group-count">${count}</span>`;
+        const body=document.createElement('div');
+        body.className='group-body';
+        head.addEventListener('click',()=>{
+          const open=body.classList.toggle('open');
+          head.classList.toggle('open',open);
+        });
+        wrap.appendChild(head);
+        wrap.appendChild(body);
+        list.appendChild(wrap);
+        groups[cfg.group]=body;
+      }
+      parent=groups[cfg.group];
+    }
+    parent.appendChild(card);
+
+    // Toggle on/off
+    const tog=card.querySelector('.lc-toggle');
+    tog.addEventListener('click',async()=>{
+      if(!layerOn[cfg.id]){
+        const ok=await ensureLoaded(cfg.id);
+        if(!ok) return;
+        if(!geoLayers[cfg.id]) geoLayers[cfg.id]=buildGeoLayer(cfg.id);
+        layerOn[cfg.id]=true;
+        geoLayers[cfg.id]?.addTo(map);
+        tog.classList.add('on');
+        card.classList.add('active');
+      }else{
+        layerOn[cfg.id]=false;
+        if(geoLayers[cfg.id]) map.removeLayer(geoLayers[cfg.id]);
+        tog.classList.remove('on');
+        card.classList.remove('active');
+      }
+    });
+
+    // Opacity
+    const sl=card.querySelector('.op-sl');
+    const ov=card.querySelector('.op-val');
+    sl.addEventListener('input',()=>{
+      const v=sl.value/100;
+      layerOp[cfg.id]=v;
+      ov.textContent=sl.value+'%';
+      geoLayers[cfg.id]?.setOpacity(v);
+    });
+
+    // Class panel toggle
+    card.querySelector('.cls-toggle-btn').addEventListener('click',e=>{
+      e.stopPropagation();
+      const panel=document.getElementById('cp-'+cfg.id);
+      panel.classList.toggle('open');
+      e.target.classList.toggle('open');
+      e.target.textContent=panel.classList.contains('open')?'รายละเอียด ▴':'รายละเอียด ▾';
+    });
+
+    // Color picker
+    card.querySelectorAll('.cp').forEach(inp=>{
+      inp.addEventListener('input',()=>{
+        const {id,k}=inp.dataset;
+        LAYERS.find(l=>l.id===id).classes[k].color=inp.value;
+        inp.closest('.cls-swatch').style.background=inp.value;
+        refreshLayer(id);
+      });
+    });
+
+    // Label edit
+    card.querySelectorAll('.cls-label-inp').forEach(inp=>{
+      inp.addEventListener('change',()=>{
+        const {id,k}=inp.dataset;
+        LAYERS.find(l=>l.id===id).classes[k].label=inp.value;
+      });
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Admin boundary lines (จังหวัด/อำเภอ/ตำบล -- province darkest & thickest,
+//  district medium, tambon lightest & thinnest)
+// ─────────────────────────────────────────────────────────────────────────────
+const BOUNDS=[
+  { id:'province', title:'จังหวัด', file:'data/bound_province.geojson', color:'#0a0a0a', weight:2.4, opacity:0.95, dash:null, hoverFill:true },
+  { id:'district', title:'อำเภอ',   file:'data/bound_district.geojson', color:'#3d3d3d', weight:1.4, opacity:0.75, dash:null, hoverFill:true },
+  { id:'tambon',   title:'ตำบล',    file:'data/bound_tambon.geojson',   color:'#6e6e6e', weight:0.7, opacity:0.5, dash:null, hoverFill:true },
+];
+// coarsest -> finest; re-applied after every toggle so the finest active layer's
+// full-area hover always wins over a coarser one covering the same ground
+const BOUND_Z_ORDER=['province','district','tambon'];
+function reorderBoundLayers(){
+  BOUND_Z_ORDER.forEach(id=>{
+    if(boundOn[id]&&boundLayers[id]) boundLayers[id].bringToFront();
+  });
+}
+const boundLayers={};
+const boundOn={};
+
+function buildBoundList(){
+  const list=document.getElementById('bound-list');
+  list.innerHTML='';
+  BOUNDS.forEach(cfg=>{
+    boundOn[cfg.id]=false;
+    const row=document.createElement('div');
+    row.className='bound-row';
+    row.innerHTML=`
+      <label class="bound-swatch-wrap" title="คลิกเพื่อเปลี่ยนสีเส้น">
+        <span class="bound-swatch" style="background:${cfg.color}"></span>
+        <input type="color" value="${cfg.color}" class="bound-cp" data-id="${cfg.id}">
+      </label>
+      <span class="bound-name">${cfg.title}</span>
+      <div class="lc-toggle" data-id="${cfg.id}"></div>
+    `;
+    list.appendChild(row);
+
+    row.querySelector('.bound-cp').addEventListener('input',e=>{
+      cfg.color=e.target.value;
+      row.querySelector('.bound-swatch').style.background=cfg.color;
+      if(boundLayers[cfg.id]) boundLayers[cfg.id].setStyle({color:cfg.color,fillColor:cfg.color});
+    });
+
+    const tog=row.querySelector('.lc-toggle');
+    tog.addEventListener('click',async()=>{
+      if(!boundOn[cfg.id]){
+        if(!boundLayers[cfg.id]){
+          setLoading(true,`โหลดเขต${cfg.title}...`);
+          try{
+            const r=await fetch(cfg.file);
+            const gj=await r.json();
+            boundLayers[cfg.id]=L.geoJSON(gj,{
+              style:{color:cfg.color,weight:cfg.weight,opacity:cfg.opacity,
+                     fill:!!cfg.hoverFill,fillColor:cfg.color,fillOpacity:cfg.hoverFill?0.02:0,
+                     dashArray:cfg.dash||null},
+              onEachFeature:(f,layer)=>{
+                if(f.properties&&f.properties.name) layer.bindTooltip(f.properties.name,{sticky:true});
+              }
+            });
+          }catch(e){ alert(`ไม่พบไฟล์ ${cfg.file}`); return; } finally{ setLoading(false); }
+        }
+        boundOn[cfg.id]=true;
+        boundLayers[cfg.id].addTo(map);
+        tog.classList.add('on');
+        reorderBoundLayers();
+      }else{
+        boundOn[cfg.id]=false;
+        map.removeLayer(boundLayers[cfg.id]);
+        tog.classList.remove('on');
+      }
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Grid attribute lookup (HTTP Range request)
+// ─────────────────────────────────────────────────────────────────────────────
+let gridMeta=null;
+let cellRect=null;
+let gridBytes=null; // whole grid_attr.bin loaded once, not fetched per click
+
+async function initGrid(){
+  try{
+    const r=await fetch('data/grid_meta.json');
+    if(r.ok) gridMeta=await r.json();
+  }catch(e){ console.warn('grid_meta.json not found'); }
+  try{
+    // Range requests depend on the static file server supporting byte ranges
+    // (many simple local servers, e.g. Python's http.server, silently ignore
+    // Range and return the WHOLE file with status 200 every time -- which
+    // reads as "grid cell (0,0)" no matter where you click). Loading the file
+    // once and indexing it locally sidesteps that entirely.
+    setLoading(true,'กำลังโหลดข้อมูลกริด...');
+    const r=await fetch('data/grid_attr.bin');
+    gridBytes=new Uint8Array(await r.arrayBuffer());
+  }catch(e){ console.warn('grid_attr.bin not found'); }
+  finally{ setLoading(false); }
+}
+
+function queryGrid(lat,lng){
+  if(!gridMeta||!gridBytes) return null;
+  const[x,y]=proj4('EPSG:4326','EPSG:32647',[lng,lat]);
+  const col=Math.floor((x-gridMeta.RXN)/gridMeta.CS);
+  const row=Math.floor((gridMeta.RYX-y)/gridMeta.CS);
+  if(col<0||col>=gridMeta.NC||row<0||row>=gridMeta.NR) return null;
+  const off=(row*gridMeta.NC+col)*7;
+  if(off+6>=gridBytes.length) return null;
+  const v=gridBytes.subarray(off,off+7);
+  return{row,col,Alloc:v[0],F2:v[1],A2:v[2],U2:v[3],Ind2:v[4],Cons:v[5],LU:v[6]};
+}
+
+function mkBadge(val,colorMap,labelMap){
+  const c=colorMap[val]||'#555', l=labelMap[val]||'–';
+  if(!val) return `<span style="color:#556">–</span>`;
+  return `<span class="badge" style="background:${c}"><span class="badge-dot"></span>${l}</span>`;
+}
+
+map.on('click',async e=>{
+  if(!gridMeta) return;
+  const d=await queryGrid(e.latlng.lat,e.latlng.lng);
+  const allZero=d&&!d.Alloc&&!d.F2&&!d.A2&&!d.U2&&!d.Ind2&&!d.Cons&&!d.LU;
+  if(!d||allZero){
+    L.popup({className:'dark-popup'}).setLatLng(e.latlng)
+     .setContent(`<div class="gpopup-wrap"><div class="gpopup-title">📌 กริด 200m</div>
+       <span style="color:#556;font-size:12px">ไม่มีข้อมูลในพื้นที่นี้</span></div>`)
+     .openOn(map);
+    if(cellRect){map.removeLayer(cellRect);cellRect=null;}
+    return;
+  }
+  // Highlight cell
+  const cs=gridMeta.CS;
+  const[bx0,by0]=proj4('EPSG:32647','EPSG:4326',[gridMeta.RXN+d.col*cs,     gridMeta.RYX-d.row*cs]);
+  const[bx1,by1]=proj4('EPSG:32647','EPSG:4326',[gridMeta.RXN+(d.col+1)*cs, gridMeta.RYX-(d.row+1)*cs]);
+  if(cellRect) map.removeLayer(cellRect);
+  cellRect=L.rectangle([[by1,bx0],[by0,bx1]],{
+    color:'#4f8ef7',weight:2,fill:true,fillColor:'#4f8ef7',fillOpacity:.12
+  }).addTo(map);
+
+  const html=`<div class="gpopup-wrap">
+    <div class="gpopup-title">
+      📌 กริด 200m
+      <span class="coord">row ${d.row} · col ${d.col}</span>
+    </div>
+    <table class="gp-table">
+      <tr><td class="gp-field">การใช้ที่ดินปัจจุบัน</td><td>${mkBadge(d.LU,LU_CLR,LU_LBL)}</td></tr>
+      <tr><td class="gp-field">การใช้ที่ดินตามศักยภาพ</td><td>${mkBadge(d.Alloc,ALLOC_CLR,ALLOC_LBL)}</td></tr>
+      <tr><td class="gp-field">ความสอดคล้อง</td><td>${mkBadge(d.Cons,CONS_CLR,CONS_LBL)}</td></tr>
+    </table>
+    <div class="gp-suit-box">
+      <table class="gp-table gp-table-sm">
+        <tr><td class="gp-field">ระดับความเหมาะสม ป่าไม้</td><td>${mkBadge(d.F2,WO_CLR,WO_LBL)}</td></tr>
+        <tr><td class="gp-field">ระดับความเหมาะสม เกษตร</td><td>${mkBadge(d.A2,WO_CLR,WO_LBL)}</td></tr>
+        <tr><td class="gp-field">ระดับความเหมาะสม เมืองและชุมชน</td><td>${mkBadge(d.U2,WO_CLR,WO_LBL)}</td></tr>
+        <tr><td class="gp-field">ระดับความเหมาะสม อุตสาหกรรม</td><td>${mkBadge(d.Ind2,WO_CLR,WO_LBL)}</td></tr>
+      </table>
+    </div>
+  </div>`;
+  L.popup({maxWidth:380,autoPan:true}).setLatLng(e.latlng).setContent(html).openOn(map);
+});
+
+map.on('popupclose',()=>{if(cellRect){map.removeLayer(cellRect);cellRect=null;}});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Loading helper
+// ─────────────────────────────────────────────────────────────────────────────
+function setLoading(show,msg=''){
+  const el=document.getElementById('loading');
+  if(show){document.getElementById('load-msg').textContent=msg;el.classList.remove('hidden');}
+  else el.classList.add('hidden');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Init
+// ─────────────────────────────────────────────────────────────────────────────
+(async()=>{
+  buildSidebar();
+  buildBoundList();
+  setLoading(false);
+  await initGrid();
+  if(gridMeta){
+    const[x0,y0]=proj4('EPSG:32647','EPSG:4326',[gridMeta.RXN,gridMeta.RYX]);
+    const[x1,y1]=proj4('EPSG:32647','EPSG:4326',[
+      gridMeta.RXN+gridMeta.NC*gridMeta.CS,
+      gridMeta.RYX-gridMeta.NR*gridMeta.CS
+    ]);
+    map.fitBounds([[y1,x0],[y0,x1]],{padding:[30,30]});
+  }
+})();
+</script>
+</body>
+</html>
