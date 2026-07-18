@@ -278,6 +278,42 @@ body{display:flex}
   .gpopup-wrap{padding:12px 14px 12px}
   .lc-toggle{width:36px;height:19px}
 }
+
+/* ══════════════ Zonal statistics panel ══════════════ */
+#zonal-panel{
+  display:none;position:fixed;top:16px;right:16px;z-index:960;
+  width:300px;max-height:calc(100vh - 32px);overflow-y:auto;
+  background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:16px 16px 14px
+}
+#zonal-panel.open{display:block}
+#zonal-panel::-webkit-scrollbar{width:4px}
+#zonal-panel::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px}
+.zp-close{
+  position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:7px;
+  background:transparent;border:none;color:var(--text3);font-size:14px;cursor:pointer;
+  font-family:inherit
+}
+.zp-close:hover{color:var(--text1);background:var(--bg3)}
+.zp-loading{font-size:12px;color:var(--text3);padding:4px 2px}
+.zp-title{font-size:13.5px;font-weight:700;color:var(--text0);padding-right:24px;margin-bottom:2px}
+.zp-sub{font-size:11px;color:var(--text3);padding-bottom:10px;border-bottom:1px solid var(--border);
+  margin-bottom:8px;font-variant-numeric:tabular-nums}
+.zp-section{margin-top:10px}
+.zp-section-title{
+  font-size:10.5px;font-weight:600;color:var(--text3);text-transform:uppercase;
+  letter-spacing:.05em;padding-bottom:5px;margin-bottom:6px;border-bottom:1px solid var(--border)
+}
+.zp-row{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text1);padding:2px 0}
+.zp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.zp-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zp-pct{font-variant-numeric:tabular-nums;color:var(--text2);flex-shrink:0}
+.zp-bar-track{height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin:2px 0 5px}
+.zp-bar-fill{height:100%;border-radius:2px}
+
+@media (max-width:600px){
+  #zonal-panel{width:calc(100vw - 32px);right:16px;left:16px;top:70px}
+}
 </style>
 </head>
 <body>
@@ -323,6 +359,7 @@ body{display:flex}
 <!-- ═══════ MAP ═══════ -->
 <div id="map"></div>
 <div id="statusbar">lat: –  lng: –</div>
+<div id="zonal-panel"></div>
 
 <!-- ═══════ SCRIPTS ═══════ -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -734,7 +771,13 @@ function buildBoundList(){
                      fill:!!cfg.hoverFill,fillColor:cfg.color,fillOpacity:cfg.hoverFill?0.02:0,
                      dashArray:cfg.dash||null},
               onEachFeature:(f,layer)=>{
-                if(f.properties&&f.properties.name) layer.bindTooltip(f.properties.name,{sticky:true});
+                if(f.properties&&f.properties.name){
+                  layer.bindTooltip(f.properties.name,{sticky:true});
+                  layer.on('click',e=>{
+                    L.DomEvent.stopPropagation(e);
+                    showZonalStats(cfg.title,f.properties.name,f.geometry);
+                  });
+                }
               }
             });
           }catch(e){ alert(`ไม่พบไฟล์ ${cfg.file}`); return; } finally{ setLoading(false); }
@@ -775,6 +818,123 @@ async function initGrid(){
     gridBytes=new Uint8Array(await r.arrayBuffer());
   }catch(e){ console.warn('grid_attr.bin not found'); }
   finally{ setLoading(false); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Zonal statistics (click a จังหวัด/อำเภอ/ตำบล polygon -> area breakdown per layer)
+// ─────────────────────────────────────────────────────────────────────────────
+function projectGeomToUTM(geom){
+  const proj=([lon,lat])=>proj4('EPSG:4326','EPSG:32647',[lon,lat]);
+  if(geom.type==='Polygon') return {type:'Polygon',coordinates:geom.coordinates.map(r=>r.map(proj))};
+  if(geom.type==='MultiPolygon') return {type:'MultiPolygon',coordinates:geom.coordinates.map(p=>p.map(r=>r.map(proj)))};
+  return null;
+}
+function pointInRing(x,y,ring){
+  let inside=false;
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+    if(((yi>y)!==(yj>y)) && (x<(xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function pointInPolyRings(x,y,rings){
+  if(!pointInRing(x,y,rings[0])) return false;
+  for(let k=1;k<rings.length;k++) if(pointInRing(x,y,rings[k])) return false;
+  return true;
+}
+function pointInUTMGeom(x,y,geom){
+  if(geom.type==='Polygon') return pointInPolyRings(x,y,geom.coordinates);
+  if(geom.type==='MultiPolygon') return geom.coordinates.some(poly=>pointInPolyRings(x,y,poly));
+  return false;
+}
+
+const RAI_PER_M2=1/1600;
+function computeZonalStats(utmGeom){
+  if(!gridMeta||!gridBytes||!utmGeom) return null;
+  const cs=gridMeta.CS;
+  const rings=utmGeom.type==='Polygon'?[utmGeom.coordinates]:utmGeom.coordinates;
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  rings.forEach(poly=>poly.forEach(ring=>ring.forEach(([x,y])=>{
+    if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;
+  })));
+  const colMin=Math.max(0,Math.floor((minX-gridMeta.RXN)/cs)-1);
+  const colMax=Math.min(gridMeta.NC-1,Math.ceil((maxX-gridMeta.RXN)/cs)+1);
+  const rowMin=Math.max(0,Math.floor((gridMeta.RYX-maxY)/cs)-1);
+  const rowMax=Math.min(gridMeta.NR-1,Math.ceil((gridMeta.RYX-minY)/cs)+1);
+
+  const counts={LU:{},Alloc:{},Cons:{},F2:{},A2:{},U2:{},Ind2:{}};
+  let total=0;
+  for(let row=rowMin; row<=rowMax; row++){
+    const cy=gridMeta.RYX-(row+0.5)*cs;
+    for(let col=colMin; col<=colMax; col++){
+      const cx=gridMeta.RXN+(col+0.5)*cs;
+      if(!pointInUTMGeom(cx,cy,utmGeom)) continue;
+      total++;
+      const off=(row*gridMeta.NC+col)*7;
+      if(off+6>=gridBytes.length) continue;
+      const v=gridBytes.subarray(off,off+7);
+      counts.Alloc[v[0]]=(counts.Alloc[v[0]]||0)+1;
+      counts.F2[v[1]]=(counts.F2[v[1]]||0)+1;
+      counts.A2[v[2]]=(counts.A2[v[2]]||0)+1;
+      counts.U2[v[3]]=(counts.U2[v[3]]||0)+1;
+      counts.Ind2[v[4]]=(counts.Ind2[v[4]]||0)+1;
+      counts.Cons[v[5]]=(counts.Cons[v[5]]||0)+1;
+      counts.LU[v[6]]=(counts.LU[v[6]]||0)+1;
+    }
+  }
+  return {total,counts,cellAreaM2:cs*cs};
+}
+
+function zpSection(title,counts,labelMap,colorMap,total){
+  const entries=Object.entries(counts).map(([k,c])=>[Number(k),c]).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length) return '';
+  const rows=entries.map(([k,c])=>{
+    const pct=total?(c/total*100):0;
+    const label=k===0?'ไม่มีข้อมูล':(labelMap[k]||`#${k}`);
+    const color=k===0?'#3a4260':(colorMap[k]||'#666');
+    return `<div class="zp-row">
+        <span class="zp-dot" style="background:${color}"></span>
+        <span class="zp-label">${label}</span>
+        <span class="zp-pct">${pct.toFixed(1)}%</span>
+      </div>
+      <div class="zp-bar-track"><div class="zp-bar-fill" style="width:${pct}%;background:${color}"></div></div>`;
+  }).join('');
+  return `<div class="zp-section"><div class="zp-section-title">${title}</div>${rows}</div>`;
+}
+
+function closeZonalPanel(){document.getElementById('zonal-panel').classList.remove('open');}
+
+function showZonalStats(levelTitle,name,geom){
+  if(!gridMeta||!gridBytes) return;
+  const panel=document.getElementById('zonal-panel');
+  panel.classList.add('open');
+  panel.innerHTML=`<button class="zp-close" onclick="closeZonalPanel()">✕</button>
+    <div class="zp-title">📍 ${levelTitle}: ${name}</div>
+    <div class="zp-loading">กำลังคำนวณพื้นที่...</div>`;
+  requestAnimationFrame(()=>{
+    const utmGeom=projectGeomToUTM(geom);
+    const stats=computeZonalStats(utmGeom);
+    if(!stats||!stats.total){
+      panel.innerHTML=`<button class="zp-close" onclick="closeZonalPanel()">✕</button>
+        <div class="zp-title">📍 ${levelTitle}: ${name}</div>
+        <div class="zp-sub">ไม่พบข้อมูลกริดในพื้นที่นี้</div>`;
+      return;
+    }
+    const totalRai=stats.total*stats.cellAreaM2*RAI_PER_M2;
+    const totalKm2=stats.total*stats.cellAreaM2/1e6;
+    panel.innerHTML=`
+      <button class="zp-close" onclick="closeZonalPanel()">✕</button>
+      <div class="zp-title">📍 ${levelTitle}: ${name}</div>
+      <div class="zp-sub">พื้นที่รวม ${totalRai.toLocaleString('th-TH',{maximumFractionDigits:0})} ไร่ (${totalKm2.toFixed(1)} ตร.กม.)</div>
+      ${zpSection('การใช้ที่ดินปัจจุบัน',stats.counts.LU,LU_LBL,LU_CLR,stats.total)}
+      ${zpSection('การใช้ที่ดินตามศักยภาพ',stats.counts.Alloc,ALLOC_LBL,ALLOC_CLR,stats.total)}
+      ${zpSection('ความสอดคล้อง',stats.counts.Cons,CONS_LBL,CONS_CLR,stats.total)}
+      ${zpSection('ระดับความเหมาะสม ป่าไม้',stats.counts.F2,WO_LBL,WO_CLR,stats.total)}
+      ${zpSection('ระดับความเหมาะสม เกษตร',stats.counts.A2,WO_LBL,WO_CLR,stats.total)}
+      ${zpSection('ระดับความเหมาะสม เมืองและชุมชน',stats.counts.U2,WO_LBL,WO_CLR,stats.total)}
+      ${zpSection('ระดับความเหมาะสม อุตสาหกรรม',stats.counts.Ind2,WO_LBL,WO_CLR,stats.total)}
+    `;
+  });
 }
 
 function queryGrid(lat,lng){
