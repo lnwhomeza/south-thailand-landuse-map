@@ -834,23 +834,20 @@ function projectGeomToUTM(geom){
   if(geom.type==='MultiPolygon') return {type:'MultiPolygon',coordinates:geom.coordinates.map(p=>p.map(r=>r.map(proj)))};
   return null;
 }
-function pointInRing(x,y,ring){
-  let inside=false;
-  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
-    const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
-    if(((yi>y)!==(yj>y)) && (x<(xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
-  }
-  return inside;
-}
-function pointInPolyRings(x,y,rings){
-  if(!pointInRing(x,y,rings[0])) return false;
-  for(let k=1;k<rings.length;k++) if(pointInRing(x,y,rings[k])) return false;
-  return true;
-}
-function pointInUTMGeom(x,y,geom){
-  if(geom.type==='Polygon') return pointInPolyRings(x,y,geom.coordinates);
-  if(geom.type==='MultiPolygon') return geom.coordinates.some(poly=>pointInPolyRings(x,y,poly));
-  return false;
+// Flatten every ring (exterior + holes, all sub-polygons) into one edge list.
+// Fed through a standard even-odd scanline fill, this naturally handles holes
+// and disjoint parts (islands) without testing per-sub-polygon separately.
+function buildEdges(utmGeom){
+  const edges=[];
+  const addRing=ring=>{
+    for(let i=0;i<ring.length-1;i++){
+      const x1=ring[i][0],y1=ring[i][1],x2=ring[i+1][0],y2=ring[i+1][1];
+      if(y1!==y2) edges.push(x1,y1,x2,y2);
+    }
+  };
+  if(utmGeom.type==='Polygon') utmGeom.coordinates.forEach(addRing);
+  else if(utmGeom.type==='MultiPolygon') utmGeom.coordinates.forEach(poly=>poly.forEach(addRing));
+  return edges; // flat [x1,y1,x2,y2, x1,y1,x2,y2, ...]
 }
 
 const RAI_PER_M2=1/1600;
@@ -867,24 +864,43 @@ function computeZonalStats(utmGeom){
   const rowMin=Math.max(0,Math.floor((gridMeta.RYX-maxY)/cs)-1);
   const rowMax=Math.min(gridMeta.NR-1,Math.ceil((gridMeta.RYX-minY)/cs)+1);
 
+  const edges=buildEdges(utmGeom);
+  const nEdges=edges.length/4;
+  const xs=new Float64Array(nEdges); // scratch buffer, reused per row
+
   const counts={LU:{},Alloc:{},Cons:{},F2:{},A2:{},U2:{},Ind2:{}};
   let total=0;
   for(let row=rowMin; row<=rowMax; row++){
     const cy=gridMeta.RYX-(row+0.5)*cs;
-    for(let col=colMin; col<=colMax; col++){
-      const cx=gridMeta.RXN+(col+0.5)*cs;
-      if(!pointInUTMGeom(cx,cy,utmGeom)) continue;
-      total++;
-      const off=(row*gridMeta.NC+col)*7;
-      if(off+6>=gridBytes.length) continue;
-      const v=gridBytes.subarray(off,off+7);
-      counts.Alloc[v[0]]=(counts.Alloc[v[0]]||0)+1;
-      counts.F2[v[1]]=(counts.F2[v[1]]||0)+1;
-      counts.A2[v[2]]=(counts.A2[v[2]]||0)+1;
-      counts.U2[v[3]]=(counts.U2[v[3]]||0)+1;
-      counts.Ind2[v[4]]=(counts.Ind2[v[4]]||0)+1;
-      counts.Cons[v[5]]=(counts.Cons[v[5]]||0)+1;
-      counts.LU[v[6]]=(counts.LU[v[6]]||0)+1;
+    // one pass over edges per ROW (not per cell) -- the actual fix for the slowness
+    let n=0;
+    for(let e=0;e<edges.length;e+=4){
+      const y1=edges[e+1], y2=edges[e+3];
+      const ylo=y1<y2?y1:y2, yhi=y1<y2?y2:y1;
+      if(cy>=ylo && cy<yhi){
+        const x1=edges[e], x2=edges[e+2];
+        xs[n++]=x1+(cy-y1)/(y2-y1)*(x2-x1);
+      }
+    }
+    const active=xs.subarray(0,n);
+    active.sort();
+    const rowBase=row*gridMeta.NC;
+    for(let k=0;k+1<n;k+=2){
+      let cStart=Math.max(colMin, Math.ceil((active[k]-gridMeta.RXN)/cs-0.5));
+      let cEnd=Math.min(colMax, Math.floor((active[k+1]-gridMeta.RXN)/cs-0.5));
+      for(let col=cStart; col<=cEnd; col++){
+        total++;
+        const off=(rowBase+col)*7;
+        if(off+6>=gridBytes.length) continue;
+        const v=gridBytes.subarray(off,off+7);
+        counts.Alloc[v[0]]=(counts.Alloc[v[0]]||0)+1;
+        counts.F2[v[1]]=(counts.F2[v[1]]||0)+1;
+        counts.A2[v[2]]=(counts.A2[v[2]]||0)+1;
+        counts.U2[v[3]]=(counts.U2[v[3]]||0)+1;
+        counts.Ind2[v[4]]=(counts.Ind2[v[4]]||0)+1;
+        counts.Cons[v[5]]=(counts.Cons[v[5]]||0)+1;
+        counts.LU[v[6]]=(counts.LU[v[6]]||0)+1;
+      }
     }
   }
   return {total,counts,cellAreaM2:cs*cs};
