@@ -789,8 +789,9 @@ function buildBoundList(){
                   layer.on('mouseover',()=>{
                     showZonalStats(cfg.title,f.properties.name,f.geometry);
                   });
-                  layer.on('click',()=>{
+                  layer.on('click',e=>{
                     showZonalStats(cfg.title,f.properties.name,f.geometry);
+                    handleGridClick(e);
                   });
                 }
               }
@@ -990,7 +991,7 @@ function mkBadge(val,colorMap,labelMap){
   return `<span class="badge" style="background:${c}"><span class="badge-dot"></span>${l}</span>`;
 }
 
-map.on('click',async e=>{
+async function handleGridClick(e){
   if(!gridMeta) return;
   const d=await queryGrid(e.latlng.lat,e.latlng.lng);
   const allZero=d&&!d.Alloc&&!d.F2&&!d.A2&&!d.U2&&!d.Ind2&&!d.Cons&&!d.LU;
@@ -1031,7 +1032,8 @@ map.on('click',async e=>{
     </div>
   </div>`;
   L.popup({maxWidth:380,autoPan:true}).setLatLng(e.latlng).setContent(html).openOn(map);
-});
+}
+map.on('click',handleGridClick);
 
 map.on('popupclose',()=>{if(cellRect){map.removeLayer(cellRect);cellRect=null;}});
 
