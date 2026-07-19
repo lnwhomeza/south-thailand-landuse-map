@@ -786,8 +786,10 @@ function buildBoundList(){
               onEachFeature:(f,layer)=>{
                 if(f.properties&&f.properties.name){
                   layer.bindTooltip(f.properties.name,{sticky:true});
-                  layer.on('click',e=>{
-                    L.DomEvent.stopPropagation(e);
+                  layer.on('mouseover',()=>{
+                    showZonalStats(cfg.title,f.properties.name,f.geometry);
+                  });
+                  layer.on('click',()=>{
                     showZonalStats(cfg.title,f.properties.name,f.geometry);
                   });
                 }
@@ -933,16 +935,20 @@ function zpSection(title,counts,labelMap,colorMap,total){
 
 function closeZonalPanel(){document.getElementById('zonal-panel').classList.remove('open');}
 
+let zonalReqId=0;
 function showZonalStats(levelTitle,name,geom){
   if(!gridMeta||!gridBytes) return;
+  const myId=++zonalReqId;
   const panel=document.getElementById('zonal-panel');
   panel.classList.add('open');
   panel.innerHTML=`<button class="zp-close" onclick="closeZonalPanel()">✕</button>
     <div class="zp-title">📍 ${levelTitle}: ${name}</div>
     <div class="zp-loading">กำลังคำนวณพื้นที่...</div>`;
   requestAnimationFrame(()=>{
+    if(myId!==zonalReqId) return; // a newer hover/click already superseded this one
     const utmGeom=projectGeomToUTM(geom);
     const stats=computeZonalStats(utmGeom);
+    if(myId!==zonalReqId) return;
     if(!stats||!stats.total){
       panel.innerHTML=`<button class="zp-close" onclick="closeZonalPanel()">✕</button>
         <div class="zp-title">📍 ${levelTitle}: ${name}</div>
