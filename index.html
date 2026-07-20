@@ -301,14 +301,26 @@ body{display:flex}
 }
 .zp-close:hover{color:var(--text1);background:var(--bg3)}
 .zp-loading{font-size:12px;color:var(--text3);padding:4px 2px}
-.zp-title{font-size:13.5px;font-weight:700;color:var(--text0);padding-right:24px;margin-bottom:2px}
+.zp-title{font-size:13.5px;font-weight:700;color:var(--text0);padding-right:24px;margin-bottom:2px;
+  display:flex;align-items:center;gap:6px}
 .zp-sub{font-size:11px;color:var(--text3);padding-bottom:10px;border-bottom:1px solid var(--border);
-  margin-bottom:8px;font-variant-numeric:tabular-nums}
-.zp-section{margin-top:10px}
+  margin-bottom:8px;font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.zp-pin-badge{
+  flex-shrink:0;font-size:10px;padding:2px 8px;border-radius:20px;cursor:pointer;
+  background:var(--bg3);color:var(--text3);border:1px solid var(--border2);white-space:nowrap
+}
+.zp-pin-badge.pinned{background:var(--accent);color:#fff;border-color:var(--accent)}
+.zp-section{margin-top:8px}
 .zp-section-title{
+  display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;
   font-size:10.5px;font-weight:600;color:var(--text3);text-transform:uppercase;
   letter-spacing:.05em;padding-bottom:5px;margin-bottom:6px;border-bottom:1px solid var(--border)
 }
+.zp-section-title:hover{color:var(--text1)}
+.zp-chevron{display:inline-block;transition:transform .18s;font-size:9px;flex-shrink:0}
+.zp-section.collapsed .zp-chevron{transform:rotate(-90deg)}
+.zp-section-body{overflow:hidden}
+.zp-section.collapsed .zp-section-body{display:none}
 .zp-row{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text1);padding:2px 0}
 .zp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .zp-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -787,10 +799,10 @@ function buildBoundList(){
                 if(f.properties&&f.properties.name){
                   layer.bindTooltip(f.properties.name,{sticky:true});
                   layer.on('mouseover',()=>{
-                    showZonalStats(cfg.title,f.properties.name,f.geometry);
+                    if(!zonalPinned) showZonalStats(cfg.title,f.properties.name,f.geometry,false);
                   });
                   layer.on('click',e=>{
-                    showZonalStats(cfg.title,f.properties.name,f.geometry);
+                    showZonalStats(cfg.title,f.properties.name,f.geometry,true);
                     handleGridClick(e);
                   });
                 }
@@ -917,6 +929,9 @@ function computeZonalStats(utmGeom){
   return {total,counts,cellAreaM2:cs*cs};
 }
 
+// sections start collapsed once the user has explicitly closed one, remembered by title
+const zpCollapsedSections=new Set();
+
 function zpSection(title,counts,labelMap,colorMap,total){
   const entries=Object.entries(counts).map(([k,c])=>[Number(k),c]).sort((a,b)=>b[1]-a[1]);
   if(!entries.length) return '';
@@ -931,14 +946,40 @@ function zpSection(title,counts,labelMap,colorMap,total){
       </div>
       <div class="zp-bar-track"><div class="zp-bar-fill" style="width:${pct}%;background:${color}"></div></div>`;
   }).join('');
-  return `<div class="zp-section"><div class="zp-section-title">${title}</div>${rows}</div>`;
+  const collapsed=zpCollapsedSections.has(title);
+  return `<div class="zp-section${collapsed?' collapsed':''}">
+      <div class="zp-section-title" onclick="toggleZpSection(this,'${title}')">
+        <span class="zp-chevron">▾</span><span>${title}</span>
+      </div>
+      <div class="zp-section-body">${rows}</div>
+    </div>`;
 }
 
-function closeZonalPanel(){document.getElementById('zonal-panel').classList.remove('open');}
+function toggleZpSection(el,title){
+  const sec=el.closest('.zp-section');
+  const nowCollapsed=sec.classList.toggle('collapsed');
+  if(nowCollapsed) zpCollapsedSections.add(title); else zpCollapsedSections.delete(title);
+}
 
+function closeZonalPanel(){
+  document.getElementById('zonal-panel').classList.remove('open');
+  zonalPinned=false;
+}
+
+function toggleZonalPin(){
+  zonalPinned=!zonalPinned;
+  const badge=document.getElementById('zp-pin-badge');
+  if(badge){
+    badge.classList.toggle('pinned',zonalPinned);
+    badge.textContent=zonalPinned?'🔒 ล็อกอยู่':'📌 ปักหมุด';
+  }
+}
+
+let zonalPinned=false;
 let zonalReqId=0;
-function showZonalStats(levelTitle,name,geom){
+function showZonalStats(levelTitle,name,geom,fromClick){
   if(!gridMeta||!gridBytes) return;
+  if(fromClick) zonalPinned=true;
   const myId=++zonalReqId;
   const panel=document.getElementById('zonal-panel');
   panel.classList.add('open');
@@ -950,10 +991,11 @@ function showZonalStats(levelTitle,name,geom){
     const utmGeom=projectGeomToUTM(geom);
     const stats=computeZonalStats(utmGeom);
     if(myId!==zonalReqId) return;
+    const pinBadge=`<span id="zp-pin-badge" class="zp-pin-badge${zonalPinned?' pinned':''}" onclick="toggleZonalPin()">${zonalPinned?'🔒 ล็อกอยู่':'📌 ปักหมุด'}</span>`;
     if(!stats||!stats.total){
       panel.innerHTML=`<button class="zp-close" onclick="closeZonalPanel()">✕</button>
         <div class="zp-title">📍 ${levelTitle}: ${name}</div>
-        <div class="zp-sub">ไม่พบข้อมูลกริดในพื้นที่นี้</div>`;
+        <div class="zp-sub">ไม่พบข้อมูลกริดในพื้นที่นี้ ${pinBadge}</div>`;
       return;
     }
     const totalRai=stats.total*stats.cellAreaM2*RAI_PER_M2;
@@ -961,7 +1003,10 @@ function showZonalStats(levelTitle,name,geom){
     panel.innerHTML=`
       <button class="zp-close" onclick="closeZonalPanel()">✕</button>
       <div class="zp-title">📍 ${levelTitle}: ${name}</div>
-      <div class="zp-sub">พื้นที่รวม ${totalRai.toLocaleString('th-TH',{maximumFractionDigits:0})} ไร่ (${totalKm2.toFixed(1)} ตร.กม.)</div>
+      <div class="zp-sub">
+        <span>พื้นที่รวม ${totalRai.toLocaleString('th-TH',{maximumFractionDigits:0})} ไร่ (${totalKm2.toFixed(1)} ตร.กม.)</span>
+        ${pinBadge}
+      </div>
       ${zpSection('การใช้ที่ดินปัจจุบัน',stats.counts.LU,LU_LBL,LU_CLR,stats.total)}
       ${zpSection('การใช้ที่ดินตามศักยภาพ',stats.counts.Alloc,ALLOC_LBL,ALLOC_CLR,stats.total)}
       ${zpSection('ความสอดคล้อง',stats.counts.Cons,CONS_LBL,CONS_CLR,stats.total)}
