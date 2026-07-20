@@ -310,19 +310,24 @@ body{display:flex}
   background:var(--bg3);color:var(--text3);border:1px solid var(--border2);white-space:nowrap
 }
 .zp-pin-badge.pinned{background:var(--accent);color:#fff;border-color:var(--accent)}
-.zp-section{margin-top:8px}
+.zp-section{
+  margin-top:8px;padding:9px 10px;background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--radius);transition:border-color .15s
+}
+.zp-section:hover{border-color:var(--border2)}
 .zp-section-title{
   display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;
   font-size:10.5px;font-weight:600;color:var(--text3);text-transform:uppercase;
   letter-spacing:.05em;padding-bottom:5px;margin-bottom:6px;border-bottom:1px solid var(--border)
 }
+.zp-section.collapsed .zp-section-title{padding-bottom:0;margin-bottom:0;border-bottom:0}
 .zp-section-title:hover{color:var(--text1)}
 .zp-chevron{display:inline-block;transition:transform .18s;font-size:9px;flex-shrink:0}
 .zp-section.collapsed .zp-chevron{transform:rotate(-90deg)}
 .zp-section-body{overflow:hidden}
 .zp-section.collapsed .zp-section-body{display:none}
 .zp-top-summary{
-  display:none;align-items:center;gap:6px;cursor:pointer;padding:2px 0;
+  display:none;align-items:center;gap:6px;cursor:pointer;padding:2px 0 0;
   font-size:11.5px;color:var(--text1)
 }
 .zp-section.collapsed .zp-top-summary{display:flex}
