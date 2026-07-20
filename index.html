@@ -322,9 +322,8 @@ body{display:flex}
 .zp-section-body{overflow:hidden}
 .zp-section.collapsed .zp-section-body{display:none}
 .zp-top-summary{
-  display:none;margin-left:auto;align-items:center;gap:4px;flex-shrink:1;min-width:0;
-  font-size:11px;font-weight:500;color:var(--text1);text-transform:none;letter-spacing:normal;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+  display:none;align-items:center;gap:6px;cursor:pointer;padding:2px 0;
+  font-size:11.5px;color:var(--text1)
 }
 .zp-section.collapsed .zp-top-summary{display:flex}
 .zp-row{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text1);padding:2px 0}
@@ -935,9 +934,11 @@ function zpSection(title,counts,labelMap,colorMap,total){
   return `<div class="zp-section${collapsed?' collapsed':''}">
       <div class="zp-section-title" onclick="toggleZpSection(this,'${title}')">
         <span class="zp-chevron">▾</span><span>${title}</span>
-        <span class="zp-top-summary">
-          <span class="zp-dot" style="background:${topColor}"></span>${topLabel} ${topPct.toFixed(1)}%
-        </span>
+      </div>
+      <div class="zp-top-summary" onclick="toggleZpSection(this.previousElementSibling,'${title}')">
+        <span class="zp-dot" style="background:${topColor}"></span>
+        <span class="zp-label">${topLabel}</span>
+        <span class="zp-pct">${topPct.toFixed(1)}%</span>
       </div>
       <div class="zp-section-body">${rows}</div>
     </div>`;
