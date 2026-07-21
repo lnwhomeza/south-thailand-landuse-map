@@ -449,7 +449,6 @@ body{display:flex}
       </div>
       <div class="swipe-side-grp">
         <div class="swipe-side-hd">ขวา ▶</div>
-        <select id="swipe-right-ds-sel" class="swipe-sel"></select>
         <select id="swipe-right-sel" class="swipe-sel"></select>
       </div>
     </div>
@@ -494,7 +493,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 15;
+const DATA_VERSION = 16;
 
 // Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
@@ -980,12 +979,6 @@ function disableSwipe(){
 map.on('move zoom resize',updateSwipeClip);
 
 function buildSwipeControls(){
-  const rightDsSel=document.getElementById('swipe-right-ds-sel');
-  const dsOptsHtml=DATASETS.map(d=>`<option value="${d}">${DATASET_LABELS[d]}</option>`).join('');
-  rightDsSel.innerHTML=dsOptsHtml;
-  rightDsSel.value=currentDataset;
-  swipeRightDataset=currentDataset;
-
   // Left side is permanently pinned to "การใช้ที่ดินปัจจุบัน" (LU_classify) on
   // the Natural Breaks dataset -- actual observed land use doesn't depend on
   // the reclassification method, so there's nothing useful to choose here;
@@ -993,26 +986,25 @@ function buildSwipeControls(){
   swipeLeftId='LU_classify';
   swipeLeftDataset='natural_breaks';
 
-  // Right side is limited to the two outputs that actually change between
-  // Natural Breaks and Manual Interval -- Alloc_LU and LU_Consistency -- since
-  // that's what this tool is for (comparing reclassification methods), not a
-  // general "pick any of the 11 layers" selector.
+  // Right side is one grouped dropdown: each of the two outputs that actually
+  // change between reclassification methods (Alloc_LU, LU_Consistency) is a
+  // non-selectable <optgroup> header, with Natural Breaks / Manual Interval
+  // as the two selectable options underneath it -- so picking an option sets
+  // BOTH the layer and the dataset in one click. The option value packs both
+  // as "<layerId>::<dataset>".
   const SWIPE_RIGHT_IDS=['Alloc_LU','LU_Consistency'];
   const rightSel=document.getElementById('swipe-right-sel');
-  const optsHtml=SWIPE_RIGHT_IDS.map(id=>{
+  const groupsHtml=SWIPE_RIGHT_IDS.map(id=>{
     const cfg=LAYERS.find(l=>l.id===id);
-    return `<option value="${cfg.id}">${cfg.icon} ${cfg.title}</option>`;
+    const opts=DATASETS.map(d=>`<option value="${id}::${d}">${DATASET_LABELS[d]}</option>`).join('');
+    return `<optgroup label="${cfg.icon} ${cfg.title}">${opts}</optgroup>`;
   }).join('');
-  rightSel.innerHTML=optsHtml;
-  rightSel.value='Alloc_LU';
-  swipeRightId=rightSel.value;
+  rightSel.innerHTML=groupsHtml;
+  rightSel.value=`Alloc_LU::${currentDataset}`;
+  [swipeRightId,swipeRightDataset]=rightSel.value.split('::');
 
   rightSel.addEventListener('change',async()=>{
-    swipeRightId=rightSel.value;
-    if(swipeOn) await setSwipeSide('right',swipeRightId,swipeRightDataset);
-  });
-  rightDsSel.addEventListener('change',async()=>{
-    swipeRightDataset=rightDsSel.value;
+    [swipeRightId,swipeRightDataset]=rightSel.value.split('::');
     if(swipeOn) await setSwipeSide('right',swipeRightId,swipeRightDataset);
   });
 
