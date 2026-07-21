@@ -362,6 +362,13 @@ body{display:flex}
   </div>
 
   <div id="sb-body">
+    <!-- Dataset (classification method) -->
+    <div class="sec-hd">ชุดข้อมูล</div>
+    <div class="base-wrap" id="dataset-wrap">
+      <label class="base-pill active"><input type="radio" name="dataset" value="natural_breaks" checked>📊 Natural Breaks</label>
+      <label class="base-pill"><input type="radio" name="dataset" value="manual_interval">📐 Manual Interval</label>
+    </div>
+
     <!-- Base map -->
     <div class="sec-hd">Base Map</div>
     <div class="base-wrap" id="base-wrap">
@@ -404,11 +411,20 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 9;
+const DATA_VERSION = 10;
+
+// Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
+// share one grid (same transform/dimensions, confirmed identical pixel mask),
+// so only the per-dataset tifs + grid_attr.bin live under their own subfolder;
+// grid_meta.json / tambon_index.bin / tambon_lookup.json / bound_*.geojson are
+// dataset-independent and stay shared at the top of data/.
+const DATASETS = ['natural_breaks','manual_interval'];
+let currentDataset = 'natural_breaks';
+function datasetPath(filename){ return `data/${currentDataset}/${filename}`; }
 
 const LAYERS = [
   { id:'LU_classify', title:'การใช้ที่ดินปัจจุบัน', icon:'🏞',
-    file:'data/LU_classify.tif', opacity:0.80,
+    file:'LU_classify.tif', opacity:0.80,
     classes:{
       1:{color:'#8bc34a',label:'เกษตรกรรม'},
       2:{color:'#27ae60',label:'ป่าไม้'},
@@ -419,7 +435,7 @@ const LAYERS = [
     }
   },
   { id:'LU_Consistency', title:'ความสอดคล้อง', icon:'🔄',
-    file:'data/LU_Consistency.tif', opacity:0.80,
+    file:'LU_Consistency.tif', opacity:0.80,
     classes:{
       1:{color:'#2ecc71',label:'เหมือนกัน'},
       2:{color:'#e74c3c',label:'ไม่เหมือนกัน'},
@@ -428,7 +444,7 @@ const LAYERS = [
     }
   },
   { id:'Alloc_LU', title:'ความเหมาะสมรวม', icon:'📋',
-    file:'data/Alloc_LU.tif', opacity:0.80,
+    file:'Alloc_LU.tif', opacity:0.80,
     classes:{
       1:{color:'#27ae60',label:'ป่าไม้'},
       2:{color:'#8bc34a',label:'เกษตรกรรม'},
@@ -437,7 +453,7 @@ const LAYERS = [
     }
   },
   { id:'WO_Forest', title:'ระดับความเหมาะสม ป่าไม้', icon:'🌲', group:'suit',
-    file:'data/WO_Forest.tif', opacity:0.75,
+    file:'WO_Forest.tif', opacity:0.75,
     classes:{
       1:{color:'#d9534f',label:'เหมาะสมน้อย'},
       2:{color:'#f1c40f',label:'เหมาะสมปานกลาง'},
@@ -446,7 +462,7 @@ const LAYERS = [
     }
   },
   { id:'WO_Agri', title:'ระดับความเหมาะสม เกษตร', icon:'🌾', group:'suit',
-    file:'data/WO_Agri.tif', opacity:0.75,
+    file:'WO_Agri.tif', opacity:0.75,
     classes:{
       1:{color:'#d9534f',label:'เหมาะสมน้อย'},
       2:{color:'#f1c40f',label:'เหมาะสมปานกลาง'},
@@ -455,7 +471,7 @@ const LAYERS = [
     }
   },
   { id:'WO_Community', title:'ระดับความเหมาะสม ชุมชน', icon:'🏘', group:'suit',
-    file:'data/WO_Community.tif', opacity:0.75,
+    file:'WO_Community.tif', opacity:0.75,
     classes:{
       1:{color:'#d9534f',label:'เหมาะสมน้อย'},
       2:{color:'#f1c40f',label:'เหมาะสมปานกลาง'},
@@ -464,7 +480,7 @@ const LAYERS = [
     }
   },
   { id:'WO_Industrial', title:'ระดับความเหมาะสม อุตสาหกรรม', icon:'🏭', group:'suit',
-    file:'data/WO_Industrial.tif', opacity:0.75,
+    file:'WO_Industrial.tif', opacity:0.75,
     classes:{
       1:{color:'#d9534f',label:'เหมาะสมน้อย'},
       2:{color:'#f1c40f',label:'เหมาะสมปานกลาง'},
@@ -473,7 +489,7 @@ const LAYERS = [
     }
   },
   { id:'Incons_Forest', title:'ศักยภาพการใช้ที่ดิน ป่าไม้', icon:'🌲', group:'incons',
-    file:'data/Inconsistency_Forest.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
+    file:'Inconsistency_Forest.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
     classes:{
       1:{color:'#8bc34a',label:'เกษตรกรรม'},
       3:{color:'#7f8c8d',label:'อื่นๆ'},
@@ -483,7 +499,7 @@ const LAYERS = [
     }
   },
   { id:'Incons_Agri', title:'ศักยภาพการใช้ที่ดิน เกษตร', icon:'🌾', group:'incons',
-    file:'data/Inconsistency_Agri.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
+    file:'Inconsistency_Agri.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
     classes:{
       2:{color:'#27ae60',label:'ป่าไม้'},
       3:{color:'#7f8c8d',label:'อื่นๆ'},
@@ -493,7 +509,7 @@ const LAYERS = [
     }
   },
   { id:'Incons_Urban', title:'ศักยภาพการใช้ที่ดิน ชุมชน', icon:'🏘', group:'incons',
-    file:'data/Inconsistency_Urban.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
+    file:'Inconsistency_Urban.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
     classes:{
       1:{color:'#8bc34a',label:'เกษตรกรรม'},
       2:{color:'#27ae60',label:'ป่าไม้'},
@@ -503,7 +519,7 @@ const LAYERS = [
     }
   },
   { id:'Incons_Industrial', title:'ศักยภาพการใช้ที่ดิน อุตสาหกรรม', icon:'🏭', group:'incons',
-    file:'data/Inconsistency_Industrial.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
+    file:'Inconsistency_Industrial.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
     classes:{
       1:{color:'#8bc34a',label:'เกษตรกรรม'},
       2:{color:'#27ae60',label:'ป่าไม้'},
@@ -559,11 +575,44 @@ baseTiles.osm.addTo(map);
 // Base map pill switch
 document.getElementById('base-wrap').querySelectorAll('.base-pill').forEach(el=>{
   el.addEventListener('click',()=>{
-    document.querySelectorAll('.base-pill').forEach(p=>p.classList.remove('active'));
+    document.querySelectorAll('#base-wrap .base-pill').forEach(p=>p.classList.remove('active'));
     el.classList.add('active');
     const val=el.querySelector('input').value;
     Object.values(baseTiles).forEach(l=>map.removeLayer(l));
     baseTiles[val].addTo(map);
+  });
+});
+
+// Dataset pill switch (Natural Breaks <-> Manual Interval) -- reloads
+// grid_attr.bin + any currently-on raster layers from the new subfolder,
+// and refreshes an already-open zonal panel / clears a now-stale click popup
+document.getElementById('dataset-wrap').querySelectorAll('.base-pill').forEach(el=>{
+  el.addEventListener('click',async()=>{
+    const val=el.querySelector('input').value;
+    if(val===currentDataset) return;
+    document.querySelectorAll('#dataset-wrap .base-pill').forEach(p=>p.classList.remove('active'));
+    el.classList.add('active');
+    currentDataset=val;
+
+    // click-popup data is dataset-specific -- close it rather than show stale values
+    map.closePopup();
+    if(cellRect){ map.removeLayer(cellRect); cellRect=null; }
+
+    await loadGridAttr();
+
+    // re-fetch + redraw every raster layer that's currently switched on
+    for(const cfg of LAYERS){
+      if(!layerOn[cfg.id]) continue;
+      if(geoLayers[cfg.id]) map.removeLayer(geoLayers[cfg.id]);
+      const ok=await ensureLoaded(cfg.id);
+      geoLayers[cfg.id]=ok?buildGeoLayer(cfg.id):null;
+      geoLayers[cfg.id]?.addTo(map);
+    }
+
+    // an open zonal panel is showing the previous dataset's stats -- recompute
+    if(lastZonal&&document.getElementById('zonal-panel').classList.contains('open')){
+      showZonalStats(lastZonal.levelTitle,lastZonal.name,lastZonal.levelKey,lastZonal.code,zonalPinned);
+    }
   });
 });
 
@@ -575,7 +624,10 @@ map.on('mousemove',e=>{
 // ─────────────────────────────────────────────────────────────────────────────
 //  Raster layer state
 // ─────────────────────────────────────────────────────────────────────────────
+// rastCache is keyed by "<dataset>::<layerId>" so switching datasets never
+// serves a stale raster from the other classification method
 const rastCache={}, geoLayers={}, layerOn={}, layerOp={};
+function cacheKey(id){ return `${currentDataset}::${id}`; }
 
 function makeColorFn(id){
   const cfg=LAYERS.find(l=>l.id===id);
@@ -587,7 +639,7 @@ function makeColorFn(id){
 }
 
 function buildGeoLayer(id){
-  const gr=rastCache[id];
+  const gr=rastCache[cacheKey(id)];
   const cfg=LAYERS.find(l=>l.id===id);
   if(!gr) return null;
   return new GeoRasterLayer({
@@ -606,15 +658,15 @@ function refreshLayer(id){
 }
 
 async function ensureLoaded(id){
-  if(rastCache[id]) return true;
+  if(rastCache[cacheKey(id)]) return true;
   const cfg=LAYERS.find(l=>l.id===id);
   setLoading(true,`โหลด ${cfg.title}...`);
   try{
-    const buf=await fetchWithProgress(`${cfg.file}?v=${DATA_VERSION}`,setLoadingProgress);
-    rastCache[id]=await parseGeoraster(buf);
+    const buf=await fetchWithProgress(`${datasetPath(cfg.file)}?v=${DATA_VERSION}`,setLoadingProgress);
+    rastCache[cacheKey(id)]=await parseGeoraster(buf);
     return true;
   }catch(e){
-    alert(`ไม่พบไฟล์ ${cfg.file}\nกรุณารัน prepare_web.py ก่อน`);
+    alert(`ไม่พบไฟล์ ${datasetPath(cfg.file)}\nกรุณารัน prepare_web.py ก่อน`);
     return false;
   }finally{setLoading(false)}
 }
@@ -842,11 +894,11 @@ let gridBytes=null; // whole grid_attr.bin loaded once, not fetched per click
 let tambonIndexArr=null; // whole tambon_index.bin loaded once (Uint16Array, same NR x NC grid)
 let tambonLookup=null;   // [{i,t,d,p,r0,r1,c0,c1}, ...] -- one row per unique tambon
 
-async function initGrid(){
-  try{
-    const r=await fetch(`data/grid_meta.json?v=${DATA_VERSION}`);
-    if(r.ok) gridMeta=await r.json();
-  }catch(e){ console.warn('grid_meta.json not found'); }
+// grid_attr.bin is per-dataset (its 7 fields come from that dataset's own
+// tifs); cached per dataset so switching back and forth doesn't re-fetch.
+const gridBytesCache={};
+async function loadGridAttr(){
+  if(gridBytesCache[currentDataset]){ gridBytes=gridBytesCache[currentDataset]; return; }
   try{
     // Range requests depend on the static file server supporting byte ranges
     // (many simple local servers, e.g. Python's http.server, silently ignore
@@ -854,9 +906,19 @@ async function initGrid(){
     // reads as "grid cell (0,0)" no matter where you click). Loading the file
     // once and indexing it locally sidesteps that entirely.
     setLoading(true,'กำลังโหลดข้อมูลกริด...');
-    const buf=await fetchWithProgress(`data/grid_attr.bin?v=${DATA_VERSION}`,setLoadingProgress);
+    const buf=await fetchWithProgress(`${datasetPath('grid_attr.bin')}?v=${DATA_VERSION}`,setLoadingProgress);
     gridBytes=new Uint8Array(buf);
+    gridBytesCache[currentDataset]=gridBytes;
   }catch(e){ console.warn('grid_attr.bin not found'); }
+  finally{ setLoading(false); }
+}
+
+async function initGrid(){
+  try{
+    const r=await fetch(`data/grid_meta.json?v=${DATA_VERSION}`);
+    if(r.ok) gridMeta=await r.json();
+  }catch(e){ console.warn('grid_meta.json not found'); }
+  await loadGridAttr();
   try{
     setLoading(true,'กำลังโหลดดัชนีเขตปกครอง...');
     const idxBuf=await fetchWithProgress(`data/tambon_index.bin?v=${DATA_VERSION}`,setLoadingProgress);
@@ -971,9 +1033,12 @@ function toggleZonalPin(){
 
 let zonalPinned=false;
 let zonalReqId=0;
+let lastZonal=null; // {levelTitle,name,levelKey,code} of the last shown panel, so a
+                     // dataset switch can recompute stats for the still-open selection
 function showZonalStats(levelTitle,name,levelKey,code,fromClick){
   if(!gridMeta||!gridBytes||code==null) return;
   if(fromClick) zonalPinned=true;
+  lastZonal={levelTitle,name,levelKey,code};
   const myId=++zonalReqId;
   const panel=document.getElementById('zonal-panel');
   panel.classList.add('open');
