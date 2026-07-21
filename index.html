@@ -194,6 +194,14 @@ body{display:flex}
   cursor:pointer;outline:none
 }
 .swipe-sel:disabled{opacity:.5;cursor:not-allowed}
+.swipe-side-grp{
+  display:flex;flex-direction:column;gap:6px;padding-top:8px;
+  border-top:1px solid var(--border)
+}
+.swipe-side-hd{
+  font-size:10px;font-weight:600;color:var(--text3);
+  text-transform:uppercase;letter-spacing:.06em
+}
 
 /* ══════════════ Swipe divider (overlaid on the map) ══════════════ */
 #swipe-divider{
@@ -431,12 +439,14 @@ body{display:flex}
         <span class="swipe-row-label">เปิดใช้งาน</span>
         <div class="lc-toggle" id="swipe-toggle"></div>
       </div>
-      <div class="swipe-row">
-        <span class="swipe-row-label">◀ ซ้าย</span>
+      <div class="swipe-side-grp">
+        <div class="swipe-side-hd">◀ ซ้าย</div>
+        <select id="swipe-left-ds-sel" class="swipe-sel"></select>
         <select id="swipe-left-sel" class="swipe-sel"></select>
       </div>
-      <div class="swipe-row">
-        <span class="swipe-row-label">ขวา ▶</span>
+      <div class="swipe-side-grp">
+        <div class="swipe-side-hd">ขวา ▶</div>
+        <select id="swipe-right-ds-sel" class="swipe-sel"></select>
         <select id="swipe-right-sel" class="swipe-sel"></select>
       </div>
     </div>
@@ -481,7 +491,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 11;
+const DATA_VERSION = 12;
 
 // Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
@@ -489,8 +499,9 @@ const DATA_VERSION = 11;
 // grid_meta.json / tambon_index.bin / tambon_lookup.json / bound_*.geojson are
 // dataset-independent and stay shared at the top of data/.
 const DATASETS = ['natural_breaks','manual_interval'];
+const DATASET_LABELS = { natural_breaks:'📊 Natural Breaks', manual_interval:'📐 Manual Interval' };
 let currentDataset = 'natural_breaks';
-function datasetPath(filename){ return `data/${currentDataset}/${filename}`; }
+function datasetPath(filename,dataset){ return `data/${dataset||currentDataset}/${filename}`; }
 
 const LAYERS = [
   { id:'LU_classify', title:'การใช้ที่ดินปัจจุบัน', icon:'🏞',
@@ -684,12 +695,9 @@ document.getElementById('dataset-wrap').querySelectorAll('.base-pill').forEach(e
       showZonalStats(lastZonal.levelTitle,lastZonal.name,lastZonal.levelKey,lastZonal.code,zonalPinned);
     }
 
-    // the swipe tool's two panes hold their own layer instances, separate
-    // from the toggle-driven ones above -- refresh them too if active
-    if(swipeOn){
-      await setSwipeSide('left',swipeLeftId);
-      await setSwipeSide('right',swipeRightId);
-    }
+    // NOTE: the swipe tool's own per-side dataset selects are intentionally
+    // left untouched here -- they're an independent choice from this main
+    // tab (that's the whole point: comparing across datasets, not just layers)
   });
 });
 
@@ -702,9 +710,12 @@ map.on('mousemove',e=>{
 //  Raster layer state
 // ─────────────────────────────────────────────────────────────────────────────
 // rastCache is keyed by "<dataset>::<layerId>" so switching datasets never
-// serves a stale raster from the other classification method
+// serves a stale raster from the other classification method. dataset is
+// optional everywhere below -- defaults to the globally-selected tab, but
+// the swipe tool passes its own per-side dataset explicitly so each side
+// can show a different classification method independent of the main tab.
 const rastCache={}, geoLayers={}, layerOn={}, layerOp={};
-function cacheKey(id){ return `${currentDataset}::${id}`; }
+function cacheKey(id,dataset){ return `${dataset||currentDataset}::${id}`; }
 
 function makeColorFn(id){
   const cfg=LAYERS.find(l=>l.id===id);
@@ -715,8 +726,8 @@ function makeColorFn(id){
   };
 }
 
-function buildGeoLayer(id,paneName){
-  const gr=rastCache[cacheKey(id)];
+function buildGeoLayer(id,paneName,dataset){
+  const gr=rastCache[cacheKey(id,dataset)];
   const cfg=LAYERS.find(l=>l.id===id);
   if(!gr) return null;
   const opts={
@@ -736,16 +747,16 @@ function refreshLayer(id){
   if(was&&geoLayers[id]) geoLayers[id].addTo(map);
 }
 
-async function ensureLoaded(id){
-  if(rastCache[cacheKey(id)]) return true;
+async function ensureLoaded(id,dataset){
+  if(rastCache[cacheKey(id,dataset)]) return true;
   const cfg=LAYERS.find(l=>l.id===id);
   setLoading(true,`โหลด ${cfg.title}...`);
   try{
-    const buf=await fetchWithProgress(`${datasetPath(cfg.file)}?v=${DATA_VERSION}`,setLoadingProgress);
-    rastCache[cacheKey(id)]=await parseGeoraster(buf);
+    const buf=await fetchWithProgress(`${datasetPath(cfg.file,dataset)}?v=${DATA_VERSION}`,setLoadingProgress);
+    rastCache[cacheKey(id,dataset)]=await parseGeoraster(buf);
     return true;
   }catch(e){
-    alert(`ไม่พบไฟล์ ${datasetPath(cfg.file)}\nกรุณารัน prepare_web.py ก่อน`);
+    alert(`ไม่พบไฟล์ ${datasetPath(cfg.file,dataset)}\nกรุณารัน prepare_web.py ก่อน`);
     return false;
   }finally{setLoading(false)}
 }
@@ -893,6 +904,9 @@ function buildSidebar(){
 // ─────────────────────────────────────────────────────────────────────────────
 let swipeOn=false;
 let swipeLeftId=null, swipeRightId=null;
+let swipeLeftDataset=null, swipeRightDataset=null; // per-side dataset override,
+  // independent of the main "ชุดข้อมูล" tab -- lets each side show a different
+  // classification method (e.g. Natural Breaks left vs Manual Interval right)
 let swipeLeftLayer=null, swipeRightLayer=null;
 let swipeDividerFrac=0.5; // 0..1, fraction of map width from the left edge
 
@@ -919,22 +933,23 @@ function updateSwipeClip(){
   if(divider) divider.style.left=x+'px';
 }
 
-function setSwipeLabel(side,id){
+function setSwipeLabel(side,id,dataset){
   const cfg=LAYERS.find(l=>l.id===id);
   const el=document.getElementById('swipe-label-'+side);
-  if(el) el.textContent=cfg?`${cfg.icon} ${cfg.title}`:'';
+  if(el) el.textContent=cfg?`${cfg.icon} ${cfg.title} · ${DATASET_LABELS[dataset]||dataset}`:'';
 }
 
-async function setSwipeSide(side,id){
+async function setSwipeSide(side,id,dataset){
   ensureSwipePanes();
   const paneName=side==='left'?'swipeLeftPane':'swipeRightPane';
   const old=side==='left'?swipeLeftLayer:swipeRightLayer;
   if(old) map.removeLayer(old);
-  setSwipeLabel(side,id);
+  setSwipeLabel(side,id,dataset);
+  if(side==='left') swipeLeftDataset=dataset; else swipeRightDataset=dataset;
   if(!id) return;
-  const ok=await ensureLoaded(id);
+  const ok=await ensureLoaded(id,dataset);
   if(!ok) return;
-  const layer=buildGeoLayer(id,paneName);
+  const layer=buildGeoLayer(id,paneName,dataset);
   layer?.addTo(map);
   if(side==='left') swipeLeftLayer=layer; else swipeRightLayer=layer;
   updateSwipeClip();
@@ -946,8 +961,8 @@ async function enableSwipe(){
   ensureSwipePanes();
   document.getElementById('swipe-divider').classList.add('active');
   document.getElementById('swipe-labels').classList.add('active');
-  await setSwipeSide('left',swipeLeftId);
-  await setSwipeSide('right',swipeRightId);
+  await setSwipeSide('left',swipeLeftId,swipeLeftDataset);
+  await setSwipeSide('right',swipeRightId,swipeRightDataset);
   updateSwipeClip();
 }
 
@@ -962,6 +977,16 @@ function disableSwipe(){
 map.on('move zoom resize',updateSwipeClip);
 
 function buildSwipeControls(){
+  const leftDsSel=document.getElementById('swipe-left-ds-sel');
+  const rightDsSel=document.getElementById('swipe-right-ds-sel');
+  const dsOptsHtml=DATASETS.map(d=>`<option value="${d}">${DATASET_LABELS[d]}</option>`).join('');
+  leftDsSel.innerHTML=dsOptsHtml;
+  rightDsSel.innerHTML=dsOptsHtml;
+  leftDsSel.value=currentDataset;
+  rightDsSel.value=currentDataset;
+  swipeLeftDataset=currentDataset;
+  swipeRightDataset=currentDataset;
+
   const leftSel=document.getElementById('swipe-left-sel');
   const rightSel=document.getElementById('swipe-right-sel');
   const optsHtml=LAYERS.map(cfg=>`<option value="${cfg.id}">${cfg.icon} ${cfg.title}</option>`).join('');
@@ -974,11 +999,19 @@ function buildSwipeControls(){
 
   leftSel.addEventListener('change',async()=>{
     swipeLeftId=leftSel.value;
-    if(swipeOn) await setSwipeSide('left',swipeLeftId);
+    if(swipeOn) await setSwipeSide('left',swipeLeftId,swipeLeftDataset);
   });
   rightSel.addEventListener('change',async()=>{
     swipeRightId=rightSel.value;
-    if(swipeOn) await setSwipeSide('right',swipeRightId);
+    if(swipeOn) await setSwipeSide('right',swipeRightId,swipeRightDataset);
+  });
+  leftDsSel.addEventListener('change',async()=>{
+    swipeLeftDataset=leftDsSel.value;
+    if(swipeOn) await setSwipeSide('left',swipeLeftId,swipeLeftDataset);
+  });
+  rightDsSel.addEventListener('change',async()=>{
+    swipeRightDataset=rightDsSel.value;
+    if(swipeOn) await setSwipeSide('right',swipeRightId,swipeRightDataset);
   });
 
   const tog=document.getElementById('swipe-toggle');
