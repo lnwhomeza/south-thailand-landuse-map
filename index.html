@@ -556,7 +556,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 20;
+const DATA_VERSION = 21;
 
 // Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
@@ -879,6 +879,7 @@ function buildSidebar(){
         const count=LAYERS.filter(l=>l.group===cfg.group).length;
         const wrap=document.createElement('div');
         wrap.className='group-wrap';
+        wrap.id='group-wrap-'+cfg.group;
         const head=document.createElement('button');
         head.type='button';
         head.className='group-toggle-btn';
@@ -1520,8 +1521,16 @@ const TUTORIAL_STEPS=[
     body:'เลือกวิธีจัดกลุ่มคะแนนความเหมาะสม ระหว่าง Natural Breaks (แบ่งกลุ่มตามการกระจายของข้อมูลจริง) กับ Manual Interval (แบ่งกลุ่มตามช่วงคะแนนที่กำหนดเอง)' },
   { target:'#base-wrap', title:'แผนที่พื้นหลัง',
     body:'สลับพื้นหลังแผนที่ได้ 3 แบบ: OSM, Dark และภาพถ่ายดาวเทียม' },
-  { target:'#layer-list', title:'เลเยอร์ข้อมูล',
-    body:'เปิด/ปิดแต่ละเลเยอร์ ปรับความทึบ และกด "รายละเอียด" เพื่อแก้สีหรือชื่อของแต่ละ class ได้' },
+  { target:'#card-LU_classify', title:'การใช้ที่ดินปัจจุบัน',
+    body:'ข้อมูลจริงจากกรมพัฒนาที่ดิน บอกว่าตอนนี้แต่ละพื้นที่ถูกใช้เป็นอะไรอยู่ (เกษตรกรรม / ป่าไม้ / อื่นๆ / อุตสาหกรรม / เมือง-ชุมชน / พื้นที่ชุ่มน้ำ)' },
+  { target:'#card-LU_Consistency', title:'ความสอดคล้อง',
+    body:'เทียบ "การใช้ที่ดินปัจจุบัน" กับ "ความเหมาะสมรวม" ว่าตรงกันมั้ย มี 4 ค่า: เหมือนกัน (การใช้ที่ดินจริงตรงกับผลของโมเดล), ไม่เหมือนกัน (การใช้ที่ดินไม่ตรงกับโมเดล), อื่นๆ (เทียบไม่ได้ เพราะปัจจุบันจัดเป็นประเภท "อื่นๆ"), น้ำ/ชุ่มน้ำ (ไม่นับรวมเพราะเป็นพื้นที่น้ำ)' },
+  { target:'#card-Alloc_LU', title:'ความเหมาะสมรวม',
+    body:'ผลสรุปจากโมเดลว่า "พื้นที่นี้ควรใช้ทำอะไรมากที่สุด" โดยเทียบคะแนนความเหมาะสมของทั้ง 4 ประเภท (ป่าไม้/เกษตร/ชุมชน/อุตสาหกรรม) แล้วเลือกตัวที่คะแนนสูงสุด' },
+  { target:'#group-wrap-suit', title:'ระดับความเหมาะสม',
+    body:'คะแนนความเหมาะสมของแต่ละประเภทแยกกัน ก่อนจะถูกเอามารวมเป็น "ความเหมาะสมรวม" เช่น "ระดับความเหมาะสม ป่าไม้" บอกว่าแต่ละจุดเหมาะกับการเป็นป่าไม้แค่ไหน (เหมาะน้อย/ปานกลาง/มาก/มากที่สุด) โดยไม่สนใจว่าจะเหมาะกับประเภทอื่นด้วยหรือไม่' },
+  { target:'#group-wrap-incons', title:'ความไม่สอดคล้อง',
+    body:'โฟกัสเฉพาะจุดที่ "ไม่เหมือนกัน" เท่านั้น (จากช่องความสอดคล้อง) แยกตามว่าโมเดลแนะนำให้เป็นประเภทไหน เช่น "ความไม่สอดคล้อง ป่าไม้" คือจุดที่โมเดลบอกว่าควรเป็นป่าไม้ แต่ปัจจุบันดันถูกใช้เป็นอย่างอื่น (สีที่แสดงคือการใช้ที่ดินจริง ณ จุดนั้น)' },
   { target:'.swipe-box', title:'เปรียบเทียบ (Swipe)',
     body:'เปิดใช้งานแล้วลากเส้นแบ่งกลางแผนที่ เพื่อเทียบความเหมาะสมรวมหรือความสอดคล้อง ระหว่าง Natural Breaks กับ Manual Interval' },
   { target:'#bound-list', title:'เขตการปกครอง',
