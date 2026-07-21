@@ -241,7 +241,6 @@ body{display:flex}
   border-radius:var(--radius);padding:10px 13px;font-size:12px;color:var(--text2);
   line-height:1.7
 }
-.grid-info-box .icon{font-size:16px;margin-right:4px;vertical-align:middle}
 .grid-hint{font-size:11px;color:var(--text3);margin-top:3px}
 
 /* ══════════════ Loading overlay ══════════════ */
@@ -412,7 +411,7 @@ body{display:flex}
 <!-- ═══════ SIDEBAR ═══════ -->
 <div id="sidebar">
   <div id="sb-header">
-    <div id="sb-title">🗺 ศักยภาพการใช้ที่ดิน (ภาคใต้)</div>
+    <div id="sb-title">ศักยภาพการใช้ที่ดิน (ภาคใต้)</div>
     <div id="sb-sub">Made by Hommie</div>
   </div>
 
@@ -420,8 +419,8 @@ body{display:flex}
     <!-- Dataset (classification method) -->
     <div class="sec-hd">ชุดข้อมูล</div>
     <div class="base-wrap" id="dataset-wrap">
-      <label class="base-pill active"><input type="radio" name="dataset" value="natural_breaks" checked>📊 Natural Breaks</label>
-      <label class="base-pill"><input type="radio" name="dataset" value="manual_interval">📐 Manual Interval</label>
+      <label class="base-pill active"><input type="radio" name="dataset" value="natural_breaks" checked>Natural Breaks</label>
+      <label class="base-pill"><input type="radio" name="dataset" value="manual_interval">Manual Interval</label>
     </div>
 
     <!-- Base map -->
@@ -445,7 +444,7 @@ body{display:flex}
       </div>
       <div class="swipe-side-grp">
         <div class="swipe-side-hd">◀ ซ้าย</div>
-        <div class="swipe-fixed" id="swipe-left-fixed">🏞 การใช้ที่ดินปัจจุบัน</div>
+        <div class="swipe-fixed" id="swipe-left-fixed">การใช้ที่ดินปัจจุบัน</div>
       </div>
       <div class="swipe-side-grp">
         <div class="swipe-side-hd">ขวา ▶</div>
@@ -460,7 +459,7 @@ body{display:flex}
     <!-- Grid info -->
     <div class="sec-hd">Grid 200m</div>
     <div class="grid-info-box">
-      <span class="icon">📌</span><b>คลิกที่ใดก็ได้บนแผนที่</b> เพื่อดูข้อมูลกริด 200m
+      <b>คลิกที่ใดก็ได้บนแผนที่</b> เพื่อดูข้อมูลกริด 200m
       <div class="grid-hint">แสดง LU, Consistency และ WO ทั้ง 4 ประเภท</div>
     </div>
   </div>
@@ -493,7 +492,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 16;
+const DATA_VERSION = 17;
 
 // Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
@@ -501,12 +500,12 @@ const DATA_VERSION = 16;
 // grid_meta.json / tambon_index.bin / tambon_lookup.json / bound_*.geojson are
 // dataset-independent and stay shared at the top of data/.
 const DATASETS = ['natural_breaks','manual_interval'];
-const DATASET_LABELS = { natural_breaks:'📊 Natural Breaks', manual_interval:'📐 Manual Interval' };
+const DATASET_LABELS = { natural_breaks:'Natural Breaks', manual_interval:'Manual Interval' };
 let currentDataset = 'natural_breaks';
 function datasetPath(filename,dataset){ return `data/${dataset||currentDataset}/${filename}`; }
 
 const LAYERS = [
-  { id:'LU_classify', title:'การใช้ที่ดินปัจจุบัน', icon:'🏞',
+  { id:'LU_classify', title:'การใช้ที่ดินปัจจุบัน', icon:'',
     file:'LU_classify.tif', opacity:0.80,
     classes:{
       1:{color:'#8bc34a',label:'เกษตรกรรม'},
@@ -517,7 +516,7 @@ const LAYERS = [
       6:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
     }
   },
-  { id:'LU_Consistency', title:'ความสอดคล้อง', icon:'🔄',
+  { id:'LU_Consistency', title:'ความสอดคล้อง', icon:'',
     file:'LU_Consistency.tif', opacity:0.80,
     classes:{
       1:{color:'#2ecc71',label:'เหมือนกัน'},
@@ -526,7 +525,7 @@ const LAYERS = [
       4:{color:'#3498db',label:'น้ำ / ชุ่มน้ำ'},
     }
   },
-  { id:'Alloc_LU', title:'ความเหมาะสมรวม', icon:'📋',
+  { id:'Alloc_LU', title:'ความเหมาะสมรวม', icon:'',
     file:'Alloc_LU.tif', opacity:0.80,
     classes:{
       1:{color:'#27ae60',label:'ป่าไม้'},
@@ -535,7 +534,7 @@ const LAYERS = [
       4:{color:'#5e2a7e',label:'อุตสาหกรรม'},
     }
   },
-  { id:'WO_Forest', title:'ระดับความเหมาะสม ป่าไม้', icon:'🌲', group:'suit',
+  { id:'WO_Forest', title:'ระดับความเหมาะสม ป่าไม้', icon:'', group:'suit',
     file:'WO_Forest.tif', opacity:0.75,
     classes:{
       1:{color:'#d9534f',label:'เหมาะสมน้อย'},
@@ -544,7 +543,7 @@ const LAYERS = [
       4:{color:'#1e8449',label:'เหมาะสมมากที่สุด'},
     }
   },
-  { id:'WO_Agri', title:'ระดับความเหมาะสม เกษตร', icon:'🌾', group:'suit',
+  { id:'WO_Agri', title:'ระดับความเหมาะสม เกษตร', icon:'', group:'suit',
     file:'WO_Agri.tif', opacity:0.75,
     classes:{
       1:{color:'#d9534f',label:'เหมาะสมน้อย'},
@@ -553,7 +552,7 @@ const LAYERS = [
       4:{color:'#1e8449',label:'เหมาะสมมากที่สุด'},
     }
   },
-  { id:'WO_Community', title:'ระดับความเหมาะสม ชุมชน', icon:'🏘', group:'suit',
+  { id:'WO_Community', title:'ระดับความเหมาะสม ชุมชน', icon:'', group:'suit',
     file:'WO_Community.tif', opacity:0.75,
     classes:{
       1:{color:'#d9534f',label:'เหมาะสมน้อย'},
@@ -562,7 +561,7 @@ const LAYERS = [
       4:{color:'#1e8449',label:'เหมาะสมมากที่สุด'},
     }
   },
-  { id:'WO_Industrial', title:'ระดับความเหมาะสม อุตสาหกรรม', icon:'🏭', group:'suit',
+  { id:'WO_Industrial', title:'ระดับความเหมาะสม อุตสาหกรรม', icon:'', group:'suit',
     file:'WO_Industrial.tif', opacity:0.75,
     classes:{
       1:{color:'#d9534f',label:'เหมาะสมน้อย'},
@@ -571,7 +570,7 @@ const LAYERS = [
       4:{color:'#1e8449',label:'เหมาะสมมากที่สุด'},
     }
   },
-  { id:'Incons_Forest', title:'ศักยภาพการใช้ที่ดิน ป่าไม้', icon:'🌲', group:'incons',
+  { id:'Incons_Forest', title:'ศักยภาพการใช้ที่ดิน ป่าไม้', icon:'', group:'incons',
     file:'Inconsistency_Forest.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
     classes:{
       1:{color:'#8bc34a',label:'เกษตรกรรม'},
@@ -581,7 +580,7 @@ const LAYERS = [
       6:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
     }
   },
-  { id:'Incons_Agri', title:'ศักยภาพการใช้ที่ดิน เกษตร', icon:'🌾', group:'incons',
+  { id:'Incons_Agri', title:'ศักยภาพการใช้ที่ดิน เกษตร', icon:'', group:'incons',
     file:'Inconsistency_Agri.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
     classes:{
       2:{color:'#27ae60',label:'ป่าไม้'},
@@ -591,7 +590,7 @@ const LAYERS = [
       6:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
     }
   },
-  { id:'Incons_Urban', title:'ศักยภาพการใช้ที่ดิน ชุมชน', icon:'🏘', group:'incons',
+  { id:'Incons_Urban', title:'ศักยภาพการใช้ที่ดิน ชุมชน', icon:'', group:'incons',
     file:'Inconsistency_Urban.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
     classes:{
       1:{color:'#8bc34a',label:'เกษตรกรรม'},
@@ -601,7 +600,7 @@ const LAYERS = [
       6:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
     }
   },
-  { id:'Incons_Industrial', title:'ศักยภาพการใช้ที่ดิน อุตสาหกรรม', icon:'🏭', group:'incons',
+  { id:'Incons_Industrial', title:'ศักยภาพการใช้ที่ดิน อุตสาหกรรม', icon:'', group:'incons',
     file:'Inconsistency_Industrial.tif', opacity:0.85, legendHeader:'การใช้ที่ดินจริง',
     classes:{
       1:{color:'#8bc34a',label:'เกษตรกรรม'},
@@ -792,7 +791,6 @@ function buildSidebar(){
     card.innerHTML=`
       <div class="lc-head">
         <div class="lc-title-row">
-          <span class="lc-icon">${cfg.icon}</span>
           <div class="lc-dot"></div>
           <span class="lc-name">${cfg.title}</span>
         </div>
@@ -938,7 +936,7 @@ function updateSwipeClip(){
 function setSwipeLabel(side,id,dataset){
   const cfg=LAYERS.find(l=>l.id===id);
   const el=document.getElementById('swipe-label-'+side);
-  if(el) el.textContent=cfg?`${cfg.icon} ${cfg.title} · ${DATASET_LABELS[dataset]||dataset}`:'';
+  if(el) el.textContent=cfg?`${cfg.title} · ${DATASET_LABELS[dataset]||dataset}`:'';
 }
 
 async function setSwipeSide(side,id,dataset){
@@ -997,7 +995,7 @@ function buildSwipeControls(){
   const groupsHtml=SWIPE_RIGHT_IDS.map(id=>{
     const cfg=LAYERS.find(l=>l.id===id);
     const opts=DATASETS.map(d=>`<option value="${id}::${d}">${DATASET_LABELS[d]}</option>`).join('');
-    return `<optgroup label="${cfg.icon} ${cfg.title}">${opts}</optgroup>`;
+    return `<optgroup label="${cfg.title}">${opts}</optgroup>`;
   }).join('');
   rightSel.innerHTML=groupsHtml;
   rightSel.value=`Alloc_LU::${currentDataset}`;
@@ -1280,7 +1278,7 @@ function toggleZonalPin(){
   const badge=document.getElementById('zp-pin-badge');
   if(badge){
     badge.classList.toggle('pinned',zonalPinned);
-    badge.textContent=zonalPinned?'🔒 ล็อกอยู่':'📌 ปักหมุด';
+    badge.textContent=zonalPinned?'ล็อกอยู่':'ปักหมุด';
   }
 }
 
@@ -1296,16 +1294,16 @@ function showZonalStats(levelTitle,name,levelKey,code,fromClick){
   const panel=document.getElementById('zonal-panel');
   panel.classList.add('open');
   panel.innerHTML=`<button class="zp-close" onclick="closeZonalPanel()">✕</button>
-    <div class="zp-title">📍 ${levelTitle}: ${name}</div>
+    <div class="zp-title">${levelTitle}: ${name}</div>
     <div class="zp-loading">กำลังคำนวณพื้นที่...</div>`;
   requestAnimationFrame(()=>{
     if(myId!==zonalReqId) return; // a newer hover/click already superseded this one
     const stats=computeZonalStats(levelKey,code);
     if(myId!==zonalReqId) return;
-    const pinBadge=`<span id="zp-pin-badge" class="zp-pin-badge${zonalPinned?' pinned':''}" onclick="toggleZonalPin()">${zonalPinned?'🔒 ล็อกอยู่':'📌 ปักหมุด'}</span>`;
+    const pinBadge=`<span id="zp-pin-badge" class="zp-pin-badge${zonalPinned?' pinned':''}" onclick="toggleZonalPin()">${zonalPinned?'ล็อกอยู่':'ปักหมุด'}</span>`;
     if(!stats||!stats.total){
       panel.innerHTML=`<button class="zp-close" onclick="closeZonalPanel()">✕</button>
-        <div class="zp-title">📍 ${levelTitle}: ${name}</div>
+        <div class="zp-title">${levelTitle}: ${name}</div>
         <div class="zp-sub">ไม่พบข้อมูลกริดในพื้นที่นี้ ${pinBadge}</div>`;
       return;
     }
@@ -1313,7 +1311,7 @@ function showZonalStats(levelTitle,name,levelKey,code,fromClick){
     const totalKm2=stats.total*stats.cellAreaM2/1e6;
     panel.innerHTML=`
       <button class="zp-close" onclick="closeZonalPanel()">✕</button>
-      <div class="zp-title">📍 ${levelTitle}: ${name}</div>
+      <div class="zp-title">${levelTitle}: ${name}</div>
       <div class="zp-sub">
         <span>พื้นที่รวม ${totalRai.toLocaleString('th-TH',{maximumFractionDigits:0})} ไร่ (${totalKm2.toFixed(1)} ตร.กม.)</span>
         ${pinBadge}
@@ -1353,7 +1351,7 @@ async function handleGridClick(e){
   const allZero=d&&!d.Alloc&&!d.F2&&!d.A2&&!d.U2&&!d.Ind2&&!d.Cons&&!d.LU;
   if(!d||allZero){
     L.popup({className:'dark-popup'}).setLatLng(e.latlng)
-     .setContent(`<div class="gpopup-wrap"><div class="gpopup-title">📌 กริด 200m</div>
+     .setContent(`<div class="gpopup-wrap"><div class="gpopup-title">กริด 200m</div>
        <span style="color:#556;font-size:12px">ไม่มีข้อมูลในพื้นที่นี้</span></div>`)
      .openOn(map);
     if(cellRect){map.removeLayer(cellRect);cellRect=null;}
@@ -1370,7 +1368,7 @@ async function handleGridClick(e){
 
   const html=`<div class="gpopup-wrap">
     <div class="gpopup-title">
-      📌 กริด 200m
+      กริด 200m
       <span class="coord">row ${d.row} · col ${d.col}</span>
     </div>
     <table class="gp-table">
