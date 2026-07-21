@@ -28,7 +28,8 @@ body{display:flex}
   border-right:1px solid var(--border);
   box-shadow:4px 0 24px rgba(0,0,0,.4);z-index:900
 }
-#map{flex:1;position:relative}
+#map-wrap{flex:1;position:relative;overflow:hidden}
+#map{position:absolute;inset:0}
 
 /* ══════════════ Sidebar Header ══════════════ */
 #sb-header{
@@ -180,6 +181,48 @@ body{display:flex}
 .bound-cp{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .bound-name{flex:1;font-size:13px;color:var(--text1)}
 
+/* ══════════════ Swipe compare box ══════════════ */
+.swipe-box{
+  margin:5px 12px 0;background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--radius);padding:10px 12px;display:flex;flex-direction:column;gap:9px
+}
+.swipe-row{display:flex;align-items:center;gap:10px}
+.swipe-row-label{font-size:11.5px;color:var(--text2);flex-shrink:0;width:52px}
+.swipe-sel{
+  flex:1;min-width:0;background:var(--bg3);color:var(--text1);border:1px solid var(--border2);
+  border-radius:var(--radius-sm);padding:5px 8px;font-size:12px;font-family:inherit;
+  cursor:pointer;outline:none
+}
+.swipe-sel:disabled{opacity:.5;cursor:not-allowed}
+
+/* ══════════════ Swipe divider (overlaid on the map) ══════════════ */
+#swipe-divider{
+  position:absolute;top:0;bottom:0;width:16px;margin-left:-8px;
+  z-index:1000;display:none;cursor:ew-resize;touch-action:none
+}
+#swipe-divider.active{display:block}
+#swipe-divider-line{
+  position:absolute;left:7px;top:0;bottom:0;width:2px;
+  background:#fff;box-shadow:0 0 6px rgba(0,0,0,.6)
+}
+#swipe-divider-handle{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:34px;height:34px;border-radius:50%;background:var(--accent);
+  color:#fff;display:flex;align-items:center;justify-content:center;
+  font-size:15px;box-shadow:0 2px 10px rgba(0,0,0,.5);user-select:none
+}
+#swipe-labels{
+  position:absolute;top:10px;left:0;right:0;display:none;
+  justify-content:space-between;padding:0 12px;z-index:999;pointer-events:none
+}
+#swipe-labels.active{display:flex}
+.swipe-label{
+  background:rgba(15,17,23,.8);backdrop-filter:blur(4px);
+  color:var(--text1);font-size:11px;padding:4px 10px;border-radius:20px;
+  border:1px solid var(--border2);max-width:45%;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap
+}
+
 /* ══════════════ Grid info box ══════════════ */
 .grid-info-box{
   margin:5px 12px 0;background:var(--bg2);border:1px solid var(--border);
@@ -274,7 +317,7 @@ body{display:flex}
   }
   body.sidebar-open #sidebar{transform:translateX(0)}
   body.sidebar-open #sidebar-backdrop{display:block}
-  #map{width:100%}
+  #map-wrap{width:100%}
   .gpopup-wrap{min-width:0;width:min(320px,calc(100vw - 56px))}
   #statusbar{font-size:10px;padding:3px 8px}
 }
@@ -381,6 +424,23 @@ body{display:flex}
     <div class="sec-hd">Raster Layers</div>
     <div id="layer-list"></div>
 
+    <!-- Swipe compare -->
+    <div class="sec-hd">เปรียบเทียบ (Swipe)</div>
+    <div class="swipe-box">
+      <div class="swipe-row">
+        <span class="swipe-row-label">เปิดใช้งาน</span>
+        <div class="lc-toggle" id="swipe-toggle"></div>
+      </div>
+      <div class="swipe-row">
+        <span class="swipe-row-label">◀ ซ้าย</span>
+        <select id="swipe-left-sel" class="swipe-sel"></select>
+      </div>
+      <div class="swipe-row">
+        <span class="swipe-row-label">ขวา ▶</span>
+        <select id="swipe-right-sel" class="swipe-sel"></select>
+      </div>
+    </div>
+
     <!-- Admin boundaries -->
     <div class="sec-hd">เขตการปกครอง</div>
     <div id="bound-list"></div>
@@ -395,7 +455,17 @@ body{display:flex}
 </div>
 
 <!-- ═══════ MAP ═══════ -->
-<div id="map"></div>
+<div id="map-wrap">
+  <div id="map"></div>
+  <div id="swipe-labels">
+    <span class="swipe-label" id="swipe-label-left"></span>
+    <span class="swipe-label" id="swipe-label-right"></span>
+  </div>
+  <div id="swipe-divider">
+    <div id="swipe-divider-line"></div>
+    <div id="swipe-divider-handle">⇔</div>
+  </div>
+</div>
 <div id="statusbar">lat: –  lng: –</div>
 <div id="zonal-panel"></div>
 
@@ -411,7 +481,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 10;
+const DATA_VERSION = 11;
 
 // Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
@@ -613,6 +683,13 @@ document.getElementById('dataset-wrap').querySelectorAll('.base-pill').forEach(e
     if(lastZonal&&document.getElementById('zonal-panel').classList.contains('open')){
       showZonalStats(lastZonal.levelTitle,lastZonal.name,lastZonal.levelKey,lastZonal.code,zonalPinned);
     }
+
+    // the swipe tool's two panes hold their own layer instances, separate
+    // from the toggle-driven ones above -- refresh them too if active
+    if(swipeOn){
+      await setSwipeSide('left',swipeLeftId);
+      await setSwipeSide('right',swipeRightId);
+    }
   });
 });
 
@@ -638,16 +715,18 @@ function makeColorFn(id){
   };
 }
 
-function buildGeoLayer(id){
+function buildGeoLayer(id,paneName){
   const gr=rastCache[cacheKey(id)];
   const cfg=LAYERS.find(l=>l.id===id);
   if(!gr) return null;
-  return new GeoRasterLayer({
+  const opts={
     georaster:gr,
     pixelValuesToColorFn:makeColorFn(id),
     opacity:layerOp[id]??0.75,
     resolution:256,
-  });
+  };
+  if(paneName) opts.pane=paneName;
+  return new GeoRasterLayer(opts);
 }
 
 function refreshLayer(id){
@@ -801,6 +880,153 @@ function buildSidebar(){
     });
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Swipe compare tool -- pick any two raster layers and drag a divider
+//  between them. Each side is rendered in its own dedicated Leaflet pane,
+//  clipped with the legacy CSS `clip: rect(...)` property (not clip-path --
+//  Leaflet's pane <div>s have no intrinsic width/height of their own since
+//  their content is all absolutely-positioned tiles, so a border-box-relative
+//  clip-path would clip against a collapsed 0x0 box; the deprecated `clip`
+//  property clips the painted region directly and is what every existing
+//  Leaflet swipe plugin relies on for exactly this reason).
+// ─────────────────────────────────────────────────────────────────────────────
+let swipeOn=false;
+let swipeLeftId=null, swipeRightId=null;
+let swipeLeftLayer=null, swipeRightLayer=null;
+let swipeDividerFrac=0.5; // 0..1, fraction of map width from the left edge
+
+function ensureSwipePanes(){
+  if(!map.getPane('swipeLeftPane')){
+    map.createPane('swipeLeftPane').style.zIndex=460;
+    map.createPane('swipeRightPane').style.zIndex=461;
+  }
+}
+
+function updateSwipeClip(){
+  if(!swipeOn) return;
+  const size=map.getSize();
+  const bounds=map.getBounds();
+  const nw=map.latLngToLayerPoint(bounds.getNorthWest());
+  const se=map.latLngToLayerPoint(bounds.getSouthEast());
+  const x=size.x*swipeDividerFrac;
+  const clipX=nw.x+x;
+  const leftPane=map.getPane('swipeLeftPane');
+  const rightPane=map.getPane('swipeRightPane');
+  if(leftPane) leftPane.style.clip=`rect(${nw.y}px,${clipX}px,${se.y}px,${nw.x}px)`;
+  if(rightPane) rightPane.style.clip=`rect(${nw.y}px,${se.x}px,${se.y}px,${clipX}px)`;
+  const divider=document.getElementById('swipe-divider');
+  if(divider) divider.style.left=x+'px';
+}
+
+function setSwipeLabel(side,id){
+  const cfg=LAYERS.find(l=>l.id===id);
+  const el=document.getElementById('swipe-label-'+side);
+  if(el) el.textContent=cfg?`${cfg.icon} ${cfg.title}`:'';
+}
+
+async function setSwipeSide(side,id){
+  ensureSwipePanes();
+  const paneName=side==='left'?'swipeLeftPane':'swipeRightPane';
+  const old=side==='left'?swipeLeftLayer:swipeRightLayer;
+  if(old) map.removeLayer(old);
+  setSwipeLabel(side,id);
+  if(!id) return;
+  const ok=await ensureLoaded(id);
+  if(!ok) return;
+  const layer=buildGeoLayer(id,paneName);
+  layer?.addTo(map);
+  if(side==='left') swipeLeftLayer=layer; else swipeRightLayer=layer;
+  updateSwipeClip();
+}
+
+async function enableSwipe(){
+  if(swipeOn) return;
+  swipeOn=true;
+  ensureSwipePanes();
+  document.getElementById('swipe-divider').classList.add('active');
+  document.getElementById('swipe-labels').classList.add('active');
+  await setSwipeSide('left',swipeLeftId);
+  await setSwipeSide('right',swipeRightId);
+  updateSwipeClip();
+}
+
+function disableSwipe(){
+  swipeOn=false;
+  if(swipeLeftLayer){ map.removeLayer(swipeLeftLayer); swipeLeftLayer=null; }
+  if(swipeRightLayer){ map.removeLayer(swipeRightLayer); swipeRightLayer=null; }
+  document.getElementById('swipe-divider').classList.remove('active');
+  document.getElementById('swipe-labels').classList.remove('active');
+}
+
+map.on('move zoom resize',updateSwipeClip);
+
+function buildSwipeControls(){
+  const leftSel=document.getElementById('swipe-left-sel');
+  const rightSel=document.getElementById('swipe-right-sel');
+  const optsHtml=LAYERS.map(cfg=>`<option value="${cfg.id}">${cfg.icon} ${cfg.title}</option>`).join('');
+  leftSel.innerHTML=optsHtml;
+  rightSel.innerHTML=optsHtml;
+  leftSel.value='LU_classify';
+  rightSel.value='Alloc_LU';
+  swipeLeftId=leftSel.value;
+  swipeRightId=rightSel.value;
+
+  leftSel.addEventListener('change',async()=>{
+    swipeLeftId=leftSel.value;
+    if(swipeOn) await setSwipeSide('left',swipeLeftId);
+  });
+  rightSel.addEventListener('change',async()=>{
+    swipeRightId=rightSel.value;
+    if(swipeOn) await setSwipeSide('right',swipeRightId);
+  });
+
+  const tog=document.getElementById('swipe-toggle');
+  tog.addEventListener('click',async()=>{
+    if(!swipeOn){
+      tog.classList.add('on');
+      setLoading(true,'กำลังโหลดเลเยอร์เปรียบเทียบ...');
+      try{ await enableSwipe(); } finally{ setLoading(false); }
+    }else{
+      tog.classList.remove('on');
+      disableSwipe();
+    }
+  });
+}
+
+// Divider drag (mouse + touch) -- grabbing the handle stops map panning
+// underneath it and drags the split position instead
+(function(){
+  const divider=document.getElementById('swipe-divider');
+  let dragging=false;
+  const start=e=>{
+    if(!swipeOn) return;
+    dragging=true;
+    map.dragging.disable();
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  const move=e=>{
+    if(!dragging) return;
+    const rect=document.getElementById('map-wrap').getBoundingClientRect();
+    const clientX=e.touches?e.touches[0].clientX:e.clientX;
+    let x=clientX-rect.left;
+    x=Math.max(0,Math.min(rect.width,x));
+    swipeDividerFrac=rect.width?x/rect.width:0.5;
+    updateSwipeClip();
+  };
+  const end=()=>{
+    if(!dragging) return;
+    dragging=false;
+    map.dragging.enable();
+  };
+  divider.addEventListener('mousedown',start);
+  divider.addEventListener('touchstart',start,{passive:false});
+  window.addEventListener('mousemove',move);
+  window.addEventListener('touchmove',move,{passive:false});
+  window.addEventListener('mouseup',end);
+  window.addEventListener('touchend',end);
+})();
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Admin boundary lines (จังหวัด/อำเภอ/ตำบล -- province darkest & thickest,
@@ -1198,6 +1424,7 @@ async function fetchWithProgress(url,onProgress){
 (async()=>{
   buildSidebar();
   buildBoundList();
+  buildSwipeControls();
   setLoading(false);
   await initGrid();
   if(gridMeta){
