@@ -556,7 +556,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 21;
+const DATA_VERSION = 22;
 
 // Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
@@ -1057,9 +1057,13 @@ function buildSwipeControls(){
   // as "<layerId>::<dataset>".
   const SWIPE_RIGHT_IDS=['Alloc_LU','LU_Consistency'];
   const rightSel=document.getElementById('swipe-right-sel');
+  // Option text repeats the layer name ("ความเหมาะสมรวม - Natural Breaks")
+  // rather than just the dataset name -- a native <select>'s closed box can
+  // only ever show the selected <option>'s own text, never the optgroup
+  // label above it, so the full context has to live in the option itself.
   const groupsHtml=SWIPE_RIGHT_IDS.map(id=>{
     const cfg=LAYERS.find(l=>l.id===id);
-    const opts=DATASETS.map(d=>`<option value="${id}::${d}">${DATASET_LABELS[d]}</option>`).join('');
+    const opts=DATASETS.map(d=>`<option value="${id}::${d}">${cfg.title} - ${DATASET_LABELS[d]}</option>`).join('');
     return `<optgroup label="${cfg.title}">${opts}</optgroup>`;
   }).join('');
   rightSel.innerHTML=groupsHtml;
