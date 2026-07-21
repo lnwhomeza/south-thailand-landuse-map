@@ -556,7 +556,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 19;
+const DATA_VERSION = 20;
 
 // Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
@@ -1511,7 +1511,7 @@ async function fetchWithProgress(url,onProgress){
 //  Guided tutorial -- spotlights each real sidebar section in sequence
 //  instead of a static wall of text, since a first-time visitor otherwise
 //  has no idea what any of these controls do. Re-launchable anytime via the
-//  "?" button; auto-runs once per browser (localStorage flag).
+//  "?" button; auto-runs on every page load per the user's preference.
 // ─────────────────────────────────────────────────────────────────────────────
 const TUTORIAL_STEPS=[
   { target:null, title:'ยินดีต้อนรับ',
@@ -1586,7 +1586,6 @@ function startTutorial(){
 
 function endTutorial(){
   document.getElementById('tutorial-overlay').classList.remove('open');
-  try{ localStorage.setItem('landuse_tutorial_seen','1'); }catch(e){}
 }
 
 document.getElementById('tt-next').addEventListener('click',()=>{
@@ -1622,9 +1621,7 @@ window.addEventListener('resize',()=>{
     ]);
     map.fitBounds([[y1,x0],[y0,x1]],{padding:[30,30]});
   }
-  try{
-    if(!localStorage.getItem('landuse_tutorial_seen')) startTutorial();
-  }catch(e){}
+  startTutorial();
 })();
 </script>
 </body>
