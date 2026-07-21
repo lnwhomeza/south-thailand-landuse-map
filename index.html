@@ -445,7 +445,6 @@ body{display:flex}
       </div>
       <div class="swipe-side-grp">
         <div class="swipe-side-hd">◀ ซ้าย</div>
-        <select id="swipe-left-ds-sel" class="swipe-sel"></select>
         <div class="swipe-fixed" id="swipe-left-fixed">🏞 การใช้ที่ดินปัจจุบัน</div>
       </div>
       <div class="swipe-side-grp">
@@ -495,7 +494,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 13;
+const DATA_VERSION = 14;
 
 // Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
@@ -981,20 +980,18 @@ function disableSwipe(){
 map.on('move zoom resize',updateSwipeClip);
 
 function buildSwipeControls(){
-  const leftDsSel=document.getElementById('swipe-left-ds-sel');
   const rightDsSel=document.getElementById('swipe-right-ds-sel');
   const dsOptsHtml=DATASETS.map(d=>`<option value="${d}">${DATASET_LABELS[d]}</option>`).join('');
-  leftDsSel.innerHTML=dsOptsHtml;
   rightDsSel.innerHTML=dsOptsHtml;
-  leftDsSel.value=currentDataset;
   rightDsSel.value=currentDataset;
-  swipeLeftDataset=currentDataset;
   swipeRightDataset=currentDataset;
 
-  // Left side is permanently pinned to "การใช้ที่ดินปัจจุบัน" (LU_classify) --
-  // the most useful baseline to compare everything else against -- so it has
-  // no layer dropdown, just the fixed label already in the HTML.
+  // Left side is permanently pinned to "การใช้ที่ดินปัจจุบัน" (LU_classify) on
+  // the Natural Breaks dataset -- actual observed land use doesn't depend on
+  // the reclassification method, so there's nothing useful to choose here;
+  // it's the fixed baseline every other layer gets compared against.
   swipeLeftId='LU_classify';
+  swipeLeftDataset='natural_breaks';
 
   const rightSel=document.getElementById('swipe-right-sel');
   const optsHtml=LAYERS.map(cfg=>`<option value="${cfg.id}">${cfg.icon} ${cfg.title}</option>`).join('');
@@ -1005,10 +1002,6 @@ function buildSwipeControls(){
   rightSel.addEventListener('change',async()=>{
     swipeRightId=rightSel.value;
     if(swipeOn) await setSwipeSide('right',swipeRightId,swipeRightDataset);
-  });
-  leftDsSel.addEventListener('change',async()=>{
-    swipeLeftDataset=leftDsSel.value;
-    if(swipeOn) await setSwipeSide('left',swipeLeftId,swipeLeftDataset);
   });
   rightDsSel.addEventListener('change',async()=>{
     swipeRightDataset=rightDsSel.value;
