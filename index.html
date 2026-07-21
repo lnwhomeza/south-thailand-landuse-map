@@ -194,6 +194,11 @@ body{display:flex}
   cursor:pointer;outline:none
 }
 .swipe-sel:disabled{opacity:.5;cursor:not-allowed}
+/* optgroup label (Thai layer name) large & bold; the Natural Breaks/Manual
+   Interval options underneath it smaller -- browser support for styling the
+   native <select> popup this way varies, but is solid in Chrome/Edge/Firefox */
+.swipe-sel optgroup{font-size:14px;font-weight:700;font-style:normal;color:var(--text0)}
+.swipe-sel option{font-size:11px;font-weight:400;color:var(--text1)}
 .swipe-fixed{
   background:var(--bg1);color:var(--text2);border:1px dashed var(--border2);
   border-radius:var(--radius-sm);padding:5px 8px;font-size:12px;cursor:default
@@ -492,7 +497,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 17;
+const DATA_VERSION = 18;
 
 // Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
