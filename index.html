@@ -194,6 +194,10 @@ body{display:flex}
   cursor:pointer;outline:none
 }
 .swipe-sel:disabled{opacity:.5;cursor:not-allowed}
+.swipe-fixed{
+  background:var(--bg1);color:var(--text2);border:1px dashed var(--border2);
+  border-radius:var(--radius-sm);padding:5px 8px;font-size:12px;cursor:default
+}
 .swipe-side-grp{
   display:flex;flex-direction:column;gap:6px;padding-top:8px;
   border-top:1px solid var(--border)
@@ -442,7 +446,7 @@ body{display:flex}
       <div class="swipe-side-grp">
         <div class="swipe-side-hd">◀ ซ้าย</div>
         <select id="swipe-left-ds-sel" class="swipe-sel"></select>
-        <select id="swipe-left-sel" class="swipe-sel"></select>
+        <div class="swipe-fixed" id="swipe-left-fixed">🏞 การใช้ที่ดินปัจจุบัน</div>
       </div>
       <div class="swipe-side-grp">
         <div class="swipe-side-hd">ขวา ▶</div>
@@ -491,7 +495,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 12;
+const DATA_VERSION = 13;
 
 // Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
@@ -987,20 +991,17 @@ function buildSwipeControls(){
   swipeLeftDataset=currentDataset;
   swipeRightDataset=currentDataset;
 
-  const leftSel=document.getElementById('swipe-left-sel');
+  // Left side is permanently pinned to "การใช้ที่ดินปัจจุบัน" (LU_classify) --
+  // the most useful baseline to compare everything else against -- so it has
+  // no layer dropdown, just the fixed label already in the HTML.
+  swipeLeftId='LU_classify';
+
   const rightSel=document.getElementById('swipe-right-sel');
   const optsHtml=LAYERS.map(cfg=>`<option value="${cfg.id}">${cfg.icon} ${cfg.title}</option>`).join('');
-  leftSel.innerHTML=optsHtml;
   rightSel.innerHTML=optsHtml;
-  leftSel.value='LU_classify';
   rightSel.value='Alloc_LU';
-  swipeLeftId=leftSel.value;
   swipeRightId=rightSel.value;
 
-  leftSel.addEventListener('change',async()=>{
-    swipeLeftId=leftSel.value;
-    if(swipeOn) await setSwipeSide('left',swipeLeftId,swipeLeftDataset);
-  });
   rightSel.addEventListener('change',async()=>{
     swipeRightId=rightSel.value;
     if(swipeOn) await setSwipeSide('right',swipeRightId,swipeRightDataset);
