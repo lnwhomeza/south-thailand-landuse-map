@@ -494,7 +494,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 14;
+const DATA_VERSION = 15;
 
 // Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
@@ -993,8 +993,16 @@ function buildSwipeControls(){
   swipeLeftId='LU_classify';
   swipeLeftDataset='natural_breaks';
 
+  // Right side is limited to the two outputs that actually change between
+  // Natural Breaks and Manual Interval -- Alloc_LU and LU_Consistency -- since
+  // that's what this tool is for (comparing reclassification methods), not a
+  // general "pick any of the 11 layers" selector.
+  const SWIPE_RIGHT_IDS=['Alloc_LU','LU_Consistency'];
   const rightSel=document.getElementById('swipe-right-sel');
-  const optsHtml=LAYERS.map(cfg=>`<option value="${cfg.id}">${cfg.icon} ${cfg.title}</option>`).join('');
+  const optsHtml=SWIPE_RIGHT_IDS.map(id=>{
+    const cfg=LAYERS.find(l=>l.id===id);
+    return `<option value="${cfg.id}">${cfg.icon} ${cfg.title}</option>`;
+  }).join('');
   rightSel.innerHTML=optsHtml;
   rightSel.value='Alloc_LU';
   swipeRightId=rightSel.value;
