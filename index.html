@@ -400,6 +400,46 @@ body{display:flex}
 @media (max-width:600px){
   #zonal-panel{width:calc(100vw - 32px);right:16px;left:16px;top:70px}
 }
+
+/* ══════════════ Guided tutorial ══════════════ */
+#tutorial-help-btn{
+  position:fixed;right:16px;bottom:16px;z-index:970;
+  width:40px;height:40px;border-radius:50%;background:var(--bg2);
+  border:1px solid var(--border2);color:var(--text1);font-size:18px;font-weight:700;
+  cursor:pointer;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;
+  font-family:inherit;padding:0;transition:border-color .2s,color .2s
+}
+#tutorial-help-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+#tutorial-overlay{display:none;position:fixed;inset:0;z-index:9400}
+#tutorial-overlay.open{display:block}
+#tutorial-block{position:fixed;inset:0}
+#tutorial-spotlight{
+  position:fixed;top:0;left:0;width:0;height:0;border-radius:10px;border:2px solid var(--accent);
+  box-shadow:0 0 0 9999px rgba(5,7,14,.78);
+  pointer-events:none;transition:top .25s ease,left .25s ease,width .25s ease,height .25s ease;
+  z-index:9401
+}
+#tutorial-spotlight.hidden{visibility:hidden}
+#tutorial-tooltip{
+  position:fixed;top:0;left:0;z-index:9402;width:300px;max-width:calc(100vw - 32px);
+  background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:16px 16px 14px;
+  transition:top .25s ease,left .25s ease
+}
+#tt-step-count{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+#tt-title{font-size:15px;font-weight:700;color:var(--text0);margin-bottom:6px}
+#tt-body{font-size:12.5px;color:var(--text2);line-height:1.6;margin-bottom:14px}
+#tt-actions{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#tt-skip{background:none;border:none;color:var(--text3);font-size:11.5px;cursor:pointer;font-family:inherit;padding:4px 0}
+#tt-skip:hover{color:var(--text1)}
+#tt-nav{display:flex;gap:8px}
+#tt-nav button{
+  padding:6px 14px;border-radius:20px;font-size:12px;font-family:inherit;cursor:pointer;
+  border:1px solid var(--border2);background:var(--bg3);color:var(--text1)
+}
+#tt-prev:disabled{opacity:.4;cursor:not-allowed}
+#tt-next{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
 </style>
 </head>
 <body>
@@ -485,6 +525,25 @@ body{display:flex}
 <div id="statusbar">lat: –  lng: –</div>
 <div id="zonal-panel"></div>
 
+<!-- ═══════ TUTORIAL ═══════ -->
+<button id="tutorial-help-btn" title="วิธีใช้งาน" aria-label="วิธีใช้งาน">?</button>
+<div id="tutorial-overlay">
+  <div id="tutorial-block"></div>
+  <div id="tutorial-spotlight"></div>
+  <div id="tutorial-tooltip">
+    <div id="tt-step-count"></div>
+    <div id="tt-title"></div>
+    <div id="tt-body"></div>
+    <div id="tt-actions">
+      <button id="tt-skip">ข้าม</button>
+      <div id="tt-nav">
+        <button id="tt-prev">ย้อนกลับ</button>
+        <button id="tt-next">ถัดไป</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════ SCRIPTS ═══════ -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.js"></script>
@@ -497,7 +556,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 18;
+const DATA_VERSION = 19;
 
 // Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
@@ -1449,6 +1508,104 @@ async function fetchWithProgress(url,onProgress){
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Guided tutorial -- spotlights each real sidebar section in sequence
+//  instead of a static wall of text, since a first-time visitor otherwise
+//  has no idea what any of these controls do. Re-launchable anytime via the
+//  "?" button; auto-runs once per browser (localStorage flag).
+// ─────────────────────────────────────────────────────────────────────────────
+const TUTORIAL_STEPS=[
+  { target:null, title:'ยินดีต้อนรับ',
+    body:'แผนที่นี้แสดงศักยภาพการใช้ที่ดินภาคใต้ ลองดูขั้นตอนสั้นๆ นี้เพื่อรู้จักฟีเจอร์หลักของเว็บกัน' },
+  { target:'#dataset-wrap', title:'ชุดข้อมูล',
+    body:'เลือกวิธีจัดกลุ่มคะแนนความเหมาะสม ระหว่าง Natural Breaks (แบ่งกลุ่มตามการกระจายของข้อมูลจริง) กับ Manual Interval (แบ่งกลุ่มตามช่วงคะแนนที่กำหนดเอง)' },
+  { target:'#base-wrap', title:'แผนที่พื้นหลัง',
+    body:'สลับพื้นหลังแผนที่ได้ 3 แบบ: OSM, Dark และภาพถ่ายดาวเทียม' },
+  { target:'#layer-list', title:'เลเยอร์ข้อมูล',
+    body:'เปิด/ปิดแต่ละเลเยอร์ ปรับความทึบ และกด "รายละเอียด" เพื่อแก้สีหรือชื่อของแต่ละ class ได้' },
+  { target:'.swipe-box', title:'เปรียบเทียบ (Swipe)',
+    body:'เปิดใช้งานแล้วลากเส้นแบ่งกลางแผนที่ เพื่อเทียบความเหมาะสมรวมหรือความสอดคล้อง ระหว่าง Natural Breaks กับ Manual Interval' },
+  { target:'#bound-list', title:'เขตการปกครอง',
+    body:'เปิดเส้นขอบเขตจังหวัด/อำเภอ/ตำบล แล้ววางเมาส์หรือคลิก เพื่อดูสัดส่วนพื้นที่แต่ละประเภทในเขตนั้น' },
+  { target:'.grid-info-box', title:'ข้อมูลกริด 200 เมตร',
+    body:'คลิกที่ใดก็ได้บนแผนที่ เพื่อดูข้อมูลของกริดจุดนั้นแบบละเอียด' },
+];
+let tutorialStep=0;
+
+function positionTutorial(){
+  const step=TUTORIAL_STEPS[tutorialStep];
+  const spotlight=document.getElementById('tutorial-spotlight');
+  const tooltip=document.getElementById('tutorial-tooltip');
+  const target=step.target?document.querySelector(step.target):null;
+
+  if(!target){
+    spotlight.classList.add('hidden');
+    tooltip.style.left='50%';
+    tooltip.style.top='90px';
+    tooltip.style.transform='translateX(-50%)';
+    return;
+  }
+  spotlight.classList.remove('hidden');
+  tooltip.style.transform='none';
+  target.scrollIntoView({block:'center'});
+  requestAnimationFrame(()=>{
+    const r=target.getBoundingClientRect();
+    const pad=6;
+    spotlight.style.top=(r.top-pad)+'px';
+    spotlight.style.left=(r.left-pad)+'px';
+    spotlight.style.width=(r.width+pad*2)+'px';
+    spotlight.style.height=(r.height+pad*2)+'px';
+
+    const narrow=window.innerWidth<860;
+    if(narrow){
+      tooltip.style.left='16px';
+      tooltip.style.top=Math.max(16,Math.min(window.innerHeight-260,r.bottom+16))+'px';
+    }else{
+      const sidebarW=document.getElementById('sidebar').getBoundingClientRect().width;
+      tooltip.style.left=(sidebarW+16)+'px';
+      tooltip.style.top=Math.max(16,Math.min(r.top,window.innerHeight-260))+'px';
+    }
+  });
+}
+
+function renderTutorialStep(){
+  const step=TUTORIAL_STEPS[tutorialStep];
+  document.getElementById('tt-step-count').textContent=`ขั้นตอนที่ ${tutorialStep+1} / ${TUTORIAL_STEPS.length}`;
+  document.getElementById('tt-title').textContent=step.title;
+  document.getElementById('tt-body').textContent=step.body;
+  document.getElementById('tt-prev').disabled=tutorialStep===0;
+  document.getElementById('tt-next').textContent=tutorialStep===TUTORIAL_STEPS.length-1?'เริ่มใช้งาน':'ถัดไป';
+  positionTutorial();
+}
+
+function startTutorial(){
+  tutorialStep=0;
+  document.getElementById('tutorial-overlay').classList.add('open');
+  if(window.innerWidth<860 && !document.body.classList.contains('sidebar-open')) openSidebar();
+  renderTutorialStep();
+}
+
+function endTutorial(){
+  document.getElementById('tutorial-overlay').classList.remove('open');
+  try{ localStorage.setItem('landuse_tutorial_seen','1'); }catch(e){}
+}
+
+document.getElementById('tt-next').addEventListener('click',()=>{
+  if(tutorialStep===TUTORIAL_STEPS.length-1){ endTutorial(); return; }
+  tutorialStep++;
+  renderTutorialStep();
+});
+document.getElementById('tt-prev').addEventListener('click',()=>{
+  if(tutorialStep===0) return;
+  tutorialStep--;
+  renderTutorialStep();
+});
+document.getElementById('tt-skip').addEventListener('click',endTutorial);
+document.getElementById('tutorial-help-btn').addEventListener('click',startTutorial);
+window.addEventListener('resize',()=>{
+  if(document.getElementById('tutorial-overlay').classList.contains('open')) positionTutorial();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Init
 // ─────────────────────────────────────────────────────────────────────────────
 (async()=>{
@@ -1465,6 +1622,9 @@ async function fetchWithProgress(url,onProgress){
     ]);
     map.fitBounds([[y1,x0],[y0,x1]],{padding:[30,30]});
   }
+  try{
+    if(!localStorage.getItem('landuse_tutorial_seen')) startTutorial();
+  }catch(e){}
 })();
 </script>
 </body>
