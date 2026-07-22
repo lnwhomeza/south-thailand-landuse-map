@@ -556,7 +556,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 22;
+const DATA_VERSION = 23;
 
 // Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
@@ -596,6 +596,7 @@ const LAYERS = [
       2:{color:'#8bc34a',label:'เกษตรกรรม'},
       3:{color:'#f48fb1',label:'เมือง/ชุมชน'},
       4:{color:'#5e2a7e',label:'อุตสาหกรรม'},
+      5:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
     }
   },
   { id:'WO_Forest', title:'ระดับความเหมาะสม ป่าไม้', icon:'', group:'suit',
@@ -681,11 +682,11 @@ const GROUP_TITLES = { suit:'ระดับความเหมาะสม', 
 const LU_LBL   ={0:'–',1:'เกษตรกรรม',2:'ป่าไม้',3:'อื่นๆ',4:'อุตสาหกรรม',5:'เมือง/ชุมชน',6:'พื้นที่ชุ่มน้ำ'};
 const CONS_LBL ={0:'–',1:'เหมือนกัน',2:'ไม่เหมือนกัน',3:'อื่นๆ',4:'น้ำ/ชุ่มน้ำ'};
 const WO_LBL   ={0:'–',1:'เหมาะสมน้อย',2:'เหมาะสมปานกลาง',3:'เหมาะสมมาก',4:'เหมาะสมมากที่สุด'};
-const ALLOC_LBL={0:'–',1:'ป่าไม้',2:'เกษตรกรรม',3:'เมือง/ชุมชน',4:'อุตสาหกรรม'};
+const ALLOC_LBL={0:'–',1:'ป่าไม้',2:'เกษตรกรรม',3:'เมือง/ชุมชน',4:'อุตสาหกรรม',5:'พื้นที่ชุ่มน้ำ'};
 const LU_CLR   ={1:'#8bc34a',2:'#27ae60',3:'#7f8c8d',4:'#5e2a7e',5:'#f48fb1',6:'#2980b9'};
 const CONS_CLR ={1:'#2ecc71',2:'#e74c3c',3:'#95a5a6',4:'#3498db'};
 const WO_CLR   ={1:'#d9534f',2:'#f1c40f',3:'#8bc34a',4:'#1e8449'};
-const ALLOC_CLR={1:'#27ae60',2:'#8bc34a',3:'#f48fb1',4:'#5e2a7e'};
+const ALLOC_CLR={1:'#27ae60',2:'#8bc34a',3:'#f48fb1',4:'#5e2a7e',5:'#2980b9'};
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  EPSG:32647
