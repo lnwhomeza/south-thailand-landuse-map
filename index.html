@@ -465,7 +465,7 @@ body{display:flex}
     <div class="sec-hd">ชุดข้อมูล</div>
     <div class="base-wrap" id="dataset-wrap">
       <label class="base-pill active"><input type="radio" name="dataset" value="natural_breaks" checked>Natural Breaks</label>
-      <label class="base-pill"><input type="radio" name="dataset" value="manual_interval">Manual Interval</label>
+      <label class="base-pill"><input type="radio" name="dataset" value="normalize">Normalize</label>
     </div>
 
     <!-- Base map -->
@@ -556,15 +556,15 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 23;
+const DATA_VERSION = 24;
 
-// Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
+// Two full pipeline outputs (Natural Breaks vs Normalize reclassification)
 // share one grid (same transform/dimensions, confirmed identical pixel mask),
 // so only the per-dataset tifs + grid_attr.bin live under their own subfolder;
 // grid_meta.json / tambon_index.bin / tambon_lookup.json / bound_*.geojson are
 // dataset-independent and stay shared at the top of data/.
-const DATASETS = ['natural_breaks','manual_interval'];
-const DATASET_LABELS = { natural_breaks:'Natural Breaks', manual_interval:'Manual Interval' };
+const DATASETS = ['natural_breaks','normalize'];
+const DATASET_LABELS = { natural_breaks:'Natural Breaks', normalize:'Normalize' };
 let currentDataset = 'natural_breaks';
 function datasetPath(filename,dataset){ return `data/${dataset||currentDataset}/${filename}`; }
 
@@ -730,7 +730,7 @@ document.getElementById('base-wrap').querySelectorAll('.base-pill').forEach(el=>
   });
 });
 
-// Dataset pill switch (Natural Breaks <-> Manual Interval) -- reloads
+// Dataset pill switch (Natural Breaks <-> Normalize) -- reloads
 // grid_attr.bin + any currently-on raster layers from the new subfolder,
 // and refreshes an already-open zonal panel / clears a now-stale click popup
 document.getElementById('dataset-wrap').querySelectorAll('.base-pill').forEach(el=>{
@@ -972,7 +972,7 @@ let swipeOn=false;
 let swipeLeftId=null, swipeRightId=null;
 let swipeLeftDataset=null, swipeRightDataset=null; // per-side dataset override,
   // independent of the main "ชุดข้อมูล" tab -- lets each side show a different
-  // classification method (e.g. Natural Breaks left vs Manual Interval right)
+  // classification method (e.g. Natural Breaks left vs Normalize right)
 let swipeLeftLayer=null, swipeRightLayer=null;
 let swipeDividerFrac=0.5; // 0..1, fraction of map width from the left edge
 
@@ -1052,7 +1052,7 @@ function buildSwipeControls(){
 
   // Right side is one grouped dropdown: each of the two outputs that actually
   // change between reclassification methods (Alloc_LU, LU_Consistency) is a
-  // non-selectable <optgroup> header, with Natural Breaks / Manual Interval
+  // non-selectable <optgroup> header, with Natural Breaks / Normalize
   // as the two selectable options underneath it -- so picking an option sets
   // BOTH the layer and the dataset in one click. The option value packs both
   // as "<layerId>::<dataset>".
@@ -1523,7 +1523,7 @@ const TUTORIAL_STEPS=[
   { target:null, title:'ยินดีต้อนรับ',
     body:'แผนที่นี้แสดงศักยภาพการใช้ที่ดินภาคใต้ ลองดูขั้นตอนสั้นๆ นี้เพื่อรู้จักฟีเจอร์หลักของเว็บกัน' },
   { target:'#dataset-wrap', title:'ชุดข้อมูล',
-    body:'เลือกวิธีจัดกลุ่มคะแนนความเหมาะสม ระหว่าง Natural Breaks (แบ่งกลุ่มตามการกระจายของข้อมูลจริง) กับ Manual Interval (แบ่งกลุ่มตามช่วงคะแนนที่กำหนดเอง)' },
+    body:'เลือกวิธีจัดกลุ่มคะแนนความเหมาะสม ระหว่าง Natural Breaks (แบ่งกลุ่มตามการกระจายของข้อมูลจริง) กับ Normalize' },
   { target:'#base-wrap', title:'แผนที่พื้นหลัง',
     body:'สลับพื้นหลังแผนที่ได้ 3 แบบ: OSM, Dark และภาพถ่ายดาวเทียม' },
   { target:'#card-LU_classify', title:'การใช้ที่ดินปัจจุบัน',
@@ -1537,7 +1537,7 @@ const TUTORIAL_STEPS=[
   { target:'#group-wrap-incons', title:'ความไม่สอดคล้อง',
     body:'โฟกัสเฉพาะจุดที่ "ไม่เหมือนกัน" เท่านั้น (จากช่องความสอดคล้อง) แยกตามว่าโมเดลแนะนำให้เป็นประเภทไหน เช่น "ความไม่สอดคล้อง ป่าไม้" คือจุดที่โมเดลบอกว่าควรเป็นป่าไม้ แต่ปัจจุบันดันถูกใช้เป็นอย่างอื่น (สีที่แสดงคือการใช้ที่ดินจริง ณ จุดนั้น)' },
   { target:'.swipe-box', title:'เปรียบเทียบ (Swipe)',
-    body:'เปิดใช้งานแล้วลากเส้นแบ่งกลางแผนที่ เพื่อเทียบความเหมาะสมรวมหรือความสอดคล้อง ระหว่าง Natural Breaks กับ Manual Interval' },
+    body:'เปิดใช้งานแล้วลากเส้นแบ่งกลางแผนที่ เพื่อเทียบความเหมาะสมรวมหรือความสอดคล้อง ระหว่าง Natural Breaks กับ Normalize' },
   { target:'#bound-list', title:'เขตการปกครอง',
     body:'เปิดเส้นขอบเขตจังหวัด/อำเภอ/ตำบล แล้ววางเมาส์หรือคลิก เพื่อดูสัดส่วนพื้นที่แต่ละประเภทในเขตนั้น' },
   { target:'.grid-info-box', title:'ข้อมูลกริด 200 เมตร',
