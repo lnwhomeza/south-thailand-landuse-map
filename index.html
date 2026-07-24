@@ -563,7 +563,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 28;
+const DATA_VERSION = 29;
 
 // Dataset = 2 independent axes combined: score type (raw score vs
 // normalize) x classification method (Natural Breaks vs Manual). All 4
@@ -747,22 +747,25 @@ document.getElementById('base-wrap').querySelectorAll('.base-pill').forEach(el=>
 });
 
 // Dataset pill switch -- 2 independent rows (score type, method) combine
-// into one of 4 datasets. Either row changing triggers the same reload:
-// grid_attr.bin + any currently-on raster layers from the new subfolder,
-// plus refreshing an already-open zonal panel / clearing a now-stale popup.
+// into one of 4 datasets. Rather than try to reload each currently-on
+// layer in place (which looked like it was still showing the old
+// dataset's data), just turn everything off -- the user re-toggles
+// whatever they want to see, which always fetches fresh via the normal
+// ensureLoaded/buildGeoLayer path (already correctly keyed by dataset).
 async function reloadForDatasetChange(){
   map.closePopup();
   if(cellRect){ map.removeLayer(cellRect); cellRect=null; }
 
-  await loadGridAttr();
-
   for(const cfg of LAYERS){
     if(!layerOn[cfg.id]) continue;
     if(geoLayers[cfg.id]) map.removeLayer(geoLayers[cfg.id]);
-    const ok=await ensureLoaded(cfg.id);
-    geoLayers[cfg.id]=ok?buildGeoLayer(cfg.id):null;
-    geoLayers[cfg.id]?.addTo(map);
+    layerOn[cfg.id]=false;
+    const card=document.getElementById('card-'+cfg.id);
+    card?.querySelector('.lc-toggle')?.classList.remove('on');
+    card?.classList.remove('active');
   }
+
+  await loadGridAttr();
 
   if(lastZonal&&document.getElementById('zonal-panel').classList.contains('open')){
     showZonalStats(lastZonal.levelTitle,lastZonal.name,lastZonal.levelKey,lastZonal.code,zonalPinned);
