@@ -461,11 +461,18 @@ body{display:flex}
   </div>
 
   <div id="sb-body">
-    <!-- Dataset (classification method) -->
+    <!-- Dataset: 2 independent axes -- score type (raw/normalize) x
+         classification method (Natural Breaks/Manual) -- combine into one
+         of 4 datasets (raw_natural_breaks, raw_manual,
+         normalize_natural_breaks, normalize_manual) -->
     <div class="sec-hd">ชุดข้อมูล</div>
-    <div class="base-wrap" id="dataset-wrap">
-      <label class="base-pill active"><input type="radio" name="dataset" value="natural_breaks" checked>Natural Breaks</label>
-      <label class="base-pill"><input type="radio" name="dataset" value="normalize">Manual Interval</label>
+    <div class="base-wrap" id="scoretype-wrap">
+      <label class="base-pill active"><input type="radio" name="scoretype" value="raw" checked>คะแนนดิบ</label>
+      <label class="base-pill"><input type="radio" name="scoretype" value="normalize">Normalize</label>
+    </div>
+    <div class="base-wrap" id="method-wrap">
+      <label class="base-pill active"><input type="radio" name="method" value="natural_breaks" checked>Natural Breaks</label>
+      <label class="base-pill"><input type="radio" name="method" value="manual">Manual</label>
     </div>
 
     <!-- Base map -->
@@ -556,17 +563,26 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 27;
+const DATA_VERSION = 28;
 
-// Two full pipeline outputs (Natural Breaks vs Manual Interval reclassification)
-// share one grid (same transform/dimensions, confirmed identical pixel mask),
-// so only the per-dataset tifs + grid_attr.bin live under their own subfolder;
-// grid_meta.json / tambon_index.bin / tambon_lookup.json / bound_*.geojson are
-// dataset-independent and stay shared at the top of data/.
-const DATASETS = ['natural_breaks','normalize'];
-const DATASET_LABELS = { natural_breaks:'Natural Breaks', normalize:'Manual Interval' };
-let currentDataset = 'natural_breaks';
-function datasetPath(filename,dataset){ return `data/${dataset||currentDataset}/${filename}`; }
+// Dataset = 2 independent axes combined: score type (raw score vs
+// normalize) x classification method (Natural Breaks vs Manual). All 4
+// combinations share one grid (same transform/dimensions/pixel mask), so
+// only the per-dataset tifs + grid_attr.bin live under their own subfolder
+// (data/<scoretype>_<method>/); grid_meta.json / tambon_index.bin /
+// tambon_lookup.json / bound_*.geojson are dataset-independent and stay
+// shared at the top of data/.
+const SCORE_TYPES = ['raw','normalize'];
+const METHODS = ['natural_breaks','manual'];
+const SCORE_TYPE_LABELS = { raw:'คะแนนดิบ', normalize:'Normalize' };
+const METHOD_LABELS = { natural_breaks:'Natural Breaks', manual:'Manual' };
+const DATASET_LABELS = {}; // "<scoretype>_<method>" -> "คะแนนดิบ - Natural Breaks" style combined label
+SCORE_TYPES.forEach(st=>METHODS.forEach(m=>{
+  DATASET_LABELS[`${st}_${m}`]=`${SCORE_TYPE_LABELS[st]} - ${METHOD_LABELS[m]}`;
+}));
+let currentScoreType='raw', currentMethod='natural_breaks';
+function currentDatasetKey(){ return `${currentScoreType}_${currentMethod}`; }
+function datasetPath(filename,dataset){ return `data/${dataset||currentDatasetKey()}/${filename}`; }
 
 const LAYERS = [
   { id:'LU_classify', title:'การใช้ที่ดินปัจจุบัน', icon:'',
@@ -730,40 +746,51 @@ document.getElementById('base-wrap').querySelectorAll('.base-pill').forEach(el=>
   });
 });
 
-// Dataset pill switch (Natural Breaks <-> Manual Interval) -- reloads
+// Dataset pill switch -- 2 independent rows (score type, method) combine
+// into one of 4 datasets. Either row changing triggers the same reload:
 // grid_attr.bin + any currently-on raster layers from the new subfolder,
-// and refreshes an already-open zonal panel / clears a now-stale click popup
-document.getElementById('dataset-wrap').querySelectorAll('.base-pill').forEach(el=>{
+// plus refreshing an already-open zonal panel / clearing a now-stale popup.
+async function reloadForDatasetChange(){
+  map.closePopup();
+  if(cellRect){ map.removeLayer(cellRect); cellRect=null; }
+
+  await loadGridAttr();
+
+  for(const cfg of LAYERS){
+    if(!layerOn[cfg.id]) continue;
+    if(geoLayers[cfg.id]) map.removeLayer(geoLayers[cfg.id]);
+    const ok=await ensureLoaded(cfg.id);
+    geoLayers[cfg.id]=ok?buildGeoLayer(cfg.id):null;
+    geoLayers[cfg.id]?.addTo(map);
+  }
+
+  if(lastZonal&&document.getElementById('zonal-panel').classList.contains('open')){
+    showZonalStats(lastZonal.levelTitle,lastZonal.name,lastZonal.levelKey,lastZonal.code,zonalPinned);
+  }
+
+  // NOTE: the swipe tool's own per-side dataset selects are intentionally
+  // left untouched here -- they're an independent choice from this main
+  // tab (that's the whole point: comparing across datasets, not just layers)
+}
+
+document.getElementById('scoretype-wrap').querySelectorAll('.base-pill').forEach(el=>{
   el.addEventListener('click',async()=>{
     const val=el.querySelector('input').value;
-    if(val===currentDataset) return;
-    document.querySelectorAll('#dataset-wrap .base-pill').forEach(p=>p.classList.remove('active'));
+    if(val===currentScoreType) return;
+    document.querySelectorAll('#scoretype-wrap .base-pill').forEach(p=>p.classList.remove('active'));
     el.classList.add('active');
-    currentDataset=val;
-
-    // click-popup data is dataset-specific -- close it rather than show stale values
-    map.closePopup();
-    if(cellRect){ map.removeLayer(cellRect); cellRect=null; }
-
-    await loadGridAttr();
-
-    // re-fetch + redraw every raster layer that's currently switched on
-    for(const cfg of LAYERS){
-      if(!layerOn[cfg.id]) continue;
-      if(geoLayers[cfg.id]) map.removeLayer(geoLayers[cfg.id]);
-      const ok=await ensureLoaded(cfg.id);
-      geoLayers[cfg.id]=ok?buildGeoLayer(cfg.id):null;
-      geoLayers[cfg.id]?.addTo(map);
-    }
-
-    // an open zonal panel is showing the previous dataset's stats -- recompute
-    if(lastZonal&&document.getElementById('zonal-panel').classList.contains('open')){
-      showZonalStats(lastZonal.levelTitle,lastZonal.name,lastZonal.levelKey,lastZonal.code,zonalPinned);
-    }
-
-    // NOTE: the swipe tool's own per-side dataset selects are intentionally
-    // left untouched here -- they're an independent choice from this main
-    // tab (that's the whole point: comparing across datasets, not just layers)
+    currentScoreType=val;
+    await reloadForDatasetChange();
+  });
+});
+document.getElementById('method-wrap').querySelectorAll('.base-pill').forEach(el=>{
+  el.addEventListener('click',async()=>{
+    const val=el.querySelector('input').value;
+    if(val===currentMethod) return;
+    document.querySelectorAll('#method-wrap .base-pill').forEach(p=>p.classList.remove('active'));
+    el.classList.add('active');
+    currentMethod=val;
+    await reloadForDatasetChange();
   });
 });
 
@@ -781,7 +808,7 @@ map.on('mousemove',e=>{
 // the swipe tool passes its own per-side dataset explicitly so each side
 // can show a different classification method independent of the main tab.
 const rastCache={}, geoLayers={}, layerOn={}, layerOp={};
-function cacheKey(id,dataset){ return `${dataset||currentDataset}::${id}`; }
+function cacheKey(id,dataset){ return `${dataset||currentDatasetKey()}::${id}`; }
 
 function makeColorFn(id){
   const cfg=LAYERS.find(l=>l.id===id);
@@ -1043,32 +1070,34 @@ function disableSwipe(){
 map.on('move zoom resize',updateSwipeClip);
 
 function buildSwipeControls(){
-  // Left side is permanently pinned to "การใช้ที่ดินปัจจุบัน" (LU_classify) on
-  // the Natural Breaks dataset -- actual observed land use doesn't depend on
-  // the reclassification method, so there's nothing useful to choose here;
-  // it's the fixed baseline every other layer gets compared against.
+  // Left side is permanently pinned to "การใช้ที่ดินปัจจุบัน" (LU_classify).
+  // Actual observed land use is the SAME single source file copied into
+  // every one of the 4 dataset folders, so which one this reads from is
+  // arbitrary -- it's the fixed baseline every other layer gets compared
+  // against, not a real choice.
   swipeLeftId='LU_classify';
-  swipeLeftDataset='natural_breaks';
+  swipeLeftDataset='raw_natural_breaks';
 
   // Right side is one grouped dropdown: each of the two outputs that actually
-  // change between reclassification methods (Alloc_LU, LU_Consistency) is a
-  // non-selectable <optgroup> header, with Natural Breaks / Manual Interval
-  // as the two selectable options underneath it -- so picking an option sets
-  // BOTH the layer and the dataset in one click. The option value packs both
-  // as "<layerId>::<dataset>".
+  // change between datasets (Alloc_LU, LU_Consistency) is a non-selectable
+  // <optgroup> header, with all 4 score-type x method combinations as the
+  // selectable options underneath it -- so picking an option sets BOTH the
+  // layer and the dataset in one click. The option value packs both as
+  // "<layerId>::<datasetKey>".
   const SWIPE_RIGHT_IDS=['Alloc_LU','LU_Consistency'];
   const rightSel=document.getElementById('swipe-right-sel');
-  // Option text repeats the layer name ("ความเหมาะสมรวม - Natural Breaks")
-  // rather than just the dataset name -- a native <select>'s closed box can
-  // only ever show the selected <option>'s own text, never the optgroup
-  // label above it, so the full context has to live in the option itself.
+  // Option text repeats the layer name ("ความเหมาะสมรวม - คะแนนดิบ - Natural
+  // Breaks") rather than just the dataset name -- a native <select>'s closed
+  // box can only ever show the selected <option>'s own text, never the
+  // optgroup label above it, so the full context has to live in the option.
+  const datasetKeys=SCORE_TYPES.flatMap(st=>METHODS.map(m=>`${st}_${m}`));
   const groupsHtml=SWIPE_RIGHT_IDS.map(id=>{
     const cfg=LAYERS.find(l=>l.id===id);
-    const opts=DATASETS.map(d=>`<option value="${id}::${d}">${cfg.title} - ${DATASET_LABELS[d]}</option>`).join('');
+    const opts=datasetKeys.map(d=>`<option value="${id}::${d}">${cfg.title} - ${DATASET_LABELS[d]}</option>`).join('');
     return `<optgroup label="${cfg.title}">${opts}</optgroup>`;
   }).join('');
   rightSel.innerHTML=groupsHtml;
-  rightSel.value=`Alloc_LU::${currentDataset}`;
+  rightSel.value=`Alloc_LU::${currentDatasetKey()}`;
   [swipeRightId,swipeRightDataset]=rightSel.value.split('::');
 
   rightSel.addEventListener('change',async()=>{
@@ -1219,7 +1248,8 @@ let tambonLookup=null;   // [{i,t,d,p,r0,r1,c0,c1}, ...] -- one row per unique t
 // tifs); cached per dataset so switching back and forth doesn't re-fetch.
 const gridBytesCache={};
 async function loadGridAttr(){
-  if(gridBytesCache[currentDataset]){ gridBytes=gridBytesCache[currentDataset]; return; }
+  const key=currentDatasetKey();
+  if(gridBytesCache[key]){ gridBytes=gridBytesCache[key]; return; }
   try{
     // Range requests depend on the static file server supporting byte ranges
     // (many simple local servers, e.g. Python's http.server, silently ignore
@@ -1229,7 +1259,7 @@ async function loadGridAttr(){
     setLoading(true,'กำลังโหลดข้อมูลกริด...');
     const buf=await fetchWithProgress(`${datasetPath('grid_attr.bin')}?v=${DATA_VERSION}`,setLoadingProgress);
     gridBytes=new Uint8Array(buf);
-    gridBytesCache[currentDataset]=gridBytes;
+    gridBytesCache[key]=gridBytes;
   }catch(e){ console.warn('grid_attr.bin not found'); }
   finally{ setLoading(false); }
 }
@@ -1522,8 +1552,10 @@ async function fetchWithProgress(url,onProgress){
 const TUTORIAL_STEPS=[
   { target:null, title:'ยินดีต้อนรับ',
     body:'แผนที่นี้แสดงศักยภาพการใช้ที่ดินภาคใต้ ลองดูขั้นตอนสั้นๆ นี้เพื่อรู้จักฟีเจอร์หลักของเว็บกัน' },
-  { target:'#dataset-wrap', title:'ชุดข้อมูล',
-    body:'เลือกวิธีจัดกลุ่มคะแนนความเหมาะสม ระหว่าง Natural Breaks (แบ่งกลุ่มตามการกระจายของข้อมูลจริง) กับ Manual Interval' },
+  { target:'#scoretype-wrap', title:'ประเภทคะแนน',
+    body:'เลือกระหว่างคะแนนดิบ (ก่อนปรับสเกล) กับ Normalize (ปรับสเกลคะแนนแล้ว) ของแบบจำลองความเหมาะสม' },
+  { target:'#method-wrap', title:'วิธีจัดกลุ่ม',
+    body:'เลือกวิธีจัดกลุ่มคะแนนความเหมาะสม ระหว่าง Natural Breaks (แบ่งกลุ่มตามการกระจายของข้อมูลจริง) กับ Manual (แบ่งกลุ่มตามช่วงคะแนนที่กำหนดเอง) — รวมกับตัวเลือกด้านบนเป็น 4 ชุดข้อมูล' },
   { target:'#base-wrap', title:'แผนที่พื้นหลัง',
     body:'สลับพื้นหลังแผนที่ได้ 3 แบบ: OSM, Dark และภาพถ่ายดาวเทียม' },
   { target:'#card-LU_classify', title:'การใช้ที่ดินปัจจุบัน',
