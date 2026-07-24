@@ -563,7 +563,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 29;
+const DATA_VERSION = 30;
 
 // Dataset = 2 independent axes combined: score type (raw score vs
 // normalize) x classification method (Natural Breaks vs Manual). All 4
@@ -759,6 +759,9 @@ async function reloadForDatasetChange(){
   for(const cfg of LAYERS){
     if(!layerOn[cfg.id]) continue;
     if(geoLayers[cfg.id]) map.removeLayer(geoLayers[cfg.id]);
+    geoLayers[cfg.id]=null; // must clear, not just remove from map -- otherwise
+                            // re-toggling this layer on reuses the stale instance
+                            // (built from the OLD dataset's cached georaster)
     layerOn[cfg.id]=false;
     const card=document.getElementById('card-'+cfg.id);
     card?.querySelector('.lc-toggle')?.classList.remove('on');
@@ -936,7 +939,10 @@ function buildSidebar(){
       if(!layerOn[cfg.id]){
         const ok=await ensureLoaded(cfg.id);
         if(!ok) return;
-        if(!geoLayers[cfg.id]) geoLayers[cfg.id]=buildGeoLayer(cfg.id);
+        // always rebuild rather than reuse a cached instance -- if the
+        // dataset changed since this layer was last built, geoLayers[cfg.id]
+        // would still be showing the OLD dataset's tiles otherwise
+        geoLayers[cfg.id]=buildGeoLayer(cfg.id);
         layerOn[cfg.id]=true;
         geoLayers[cfg.id]?.addTo(map);
         tog.classList.add('on');
