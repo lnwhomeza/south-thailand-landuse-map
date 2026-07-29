@@ -194,7 +194,7 @@ body{display:flex}
   cursor:pointer;outline:none
 }
 .swipe-sel:disabled{opacity:.5;cursor:not-allowed}
-/* optgroup label (Thai layer name) large & bold; the Natural Breaks/Manual Interval
+/* optgroup label (Thai layer name) large & bold; the score-type (raw/normalize)
    options underneath it smaller -- browser support for styling the
    native <select> popup this way varies, but is solid in Chrome/Edge/Firefox */
 .swipe-sel optgroup{font-size:14px;font-weight:700;font-style:normal;color:var(--text0)}
@@ -461,18 +461,13 @@ body{display:flex}
   </div>
 
   <div id="sb-body">
-    <!-- Dataset: 2 independent axes -- score type (raw/normalize) x
-         classification method (Natural Breaks/Manual) -- combine into one
-         of 4 datasets (raw_natural_breaks, raw_manual,
-         normalize_natural_breaks, normalize_manual) -->
+    <!-- Dataset: score type (raw/normalize) x classification method.
+         Method is fixed to Natural Breaks only (Manual removed) -- combine
+         into one of 2 datasets (raw_natural_breaks, normalize_natural_breaks) -->
     <div class="sec-hd">ชุดข้อมูล</div>
     <div class="base-wrap" id="scoretype-wrap">
       <label class="base-pill active"><input type="radio" name="scoretype" value="raw" checked>คะแนนดิบ</label>
       <label class="base-pill"><input type="radio" name="scoretype" value="normalize">Normalize</label>
-    </div>
-    <div class="base-wrap" id="method-wrap">
-      <label class="base-pill active"><input type="radio" name="method" value="natural_breaks" checked>Natural Breaks</label>
-      <label class="base-pill"><input type="radio" name="method" value="manual">Manual</label>
     </div>
 
     <!-- Base map -->
@@ -565,17 +560,17 @@ body{display:flex}
 // (this is exactly what caused a just-pushed data fix to still look broken).
 const DATA_VERSION = 31;
 
-// Dataset = 2 independent axes combined: score type (raw score vs
-// normalize) x classification method (Natural Breaks vs Manual). All 4
-// combinations share one grid (same transform/dimensions/pixel mask), so
-// only the per-dataset tifs + grid_attr.bin live under their own subfolder
-// (data/<scoretype>_<method>/); grid_meta.json / tambon_index.bin /
+// Dataset = score type (raw score vs normalize) x classification method,
+// method fixed to Natural Breaks only (Manual removed). Both score types
+// share one grid (same transform/dimensions/pixel mask), so only the
+// per-dataset tifs + grid_attr.bin live under their own subfolder
+// (data/<scoretype>_natural_breaks/); grid_meta.json / tambon_index.bin /
 // tambon_lookup.json / bound_*.geojson are dataset-independent and stay
 // shared at the top of data/.
 const SCORE_TYPES = ['raw','normalize'];
-const METHODS = ['natural_breaks','manual'];
+const METHODS = ['natural_breaks'];
 const SCORE_TYPE_LABELS = { raw:'คะแนนดิบ', normalize:'Normalize' };
-const METHOD_LABELS = { natural_breaks:'Natural Breaks', manual:'Manual' };
+const METHOD_LABELS = { natural_breaks:'Natural Breaks' };
 const DATASET_LABELS = {}; // "<scoretype>_<method>" -> "คะแนนดิบ - Natural Breaks" style combined label
 SCORE_TYPES.forEach(st=>METHODS.forEach(m=>{
   DATASET_LABELS[`${st}_${m}`]=`${SCORE_TYPE_LABELS[st]} - ${METHOD_LABELS[m]}`;
@@ -789,16 +784,6 @@ document.getElementById('scoretype-wrap').querySelectorAll('.base-pill').forEach
     await reloadForDatasetChange();
   });
 });
-document.getElementById('method-wrap').querySelectorAll('.base-pill').forEach(el=>{
-  el.addEventListener('click',async()=>{
-    const val=el.querySelector('input').value;
-    if(val===currentMethod) return;
-    document.querySelectorAll('#method-wrap .base-pill').forEach(p=>p.classList.remove('active'));
-    el.classList.add('active');
-    currentMethod=val;
-    await reloadForDatasetChange();
-  });
-});
 
 map.on('mousemove',e=>{
   document.getElementById('statusbar').textContent=
@@ -1008,7 +993,7 @@ let swipeOn=false;
 let swipeLeftId=null, swipeRightId=null;
 let swipeLeftDataset=null, swipeRightDataset=null; // per-side dataset override,
   // independent of the main "ชุดข้อมูล" tab -- lets each side show a different
-  // classification method (e.g. Natural Breaks left vs Manual Interval right)
+  // score type (e.g. raw score left vs Normalize right)
 let swipeLeftLayer=null, swipeRightLayer=null;
 let swipeDividerFrac=0.5; // 0..1, fraction of map width from the left edge
 
@@ -1563,8 +1548,6 @@ const TUTORIAL_STEPS=[
     body:'แผนที่นี้แสดงศักยภาพการใช้ที่ดินภาคใต้ ลองดูขั้นตอนสั้นๆ นี้เพื่อรู้จักฟีเจอร์หลักของเว็บกัน' },
   { target:'#scoretype-wrap', title:'ประเภทคะแนน',
     body:'เลือกระหว่างคะแนนดิบ (ก่อนปรับสเกล) กับ Normalize (ปรับสเกลคะแนนแล้ว) ของแบบจำลองความเหมาะสม' },
-  { target:'#method-wrap', title:'วิธีจัดกลุ่ม',
-    body:'เลือกวิธีจัดกลุ่มคะแนนความเหมาะสม ระหว่าง Natural Breaks (แบ่งกลุ่มตามการกระจายของข้อมูลจริง) กับ Manual (แบ่งกลุ่มตามช่วงคะแนนที่กำหนดเอง) — รวมกับตัวเลือกด้านบนเป็น 4 ชุดข้อมูล' },
   { target:'#base-wrap', title:'แผนที่พื้นหลัง',
     body:'สลับพื้นหลังแผนที่ได้ 3 แบบ: OSM, Dark และภาพถ่ายดาวเทียม' },
   { target:'#card-LU_classify', title:'การใช้ที่ดินปัจจุบัน',
@@ -1578,7 +1561,7 @@ const TUTORIAL_STEPS=[
   { target:'#group-wrap-incons', title:'ความไม่สอดคล้อง',
     body:'โฟกัสเฉพาะจุดที่ "ไม่เหมือนกัน" เท่านั้น (จากช่องความสอดคล้อง) แยกตามว่าโมเดลแนะนำให้เป็นประเภทไหน เช่น "ความไม่สอดคล้อง ป่าไม้" คือจุดที่โมเดลบอกว่าควรเป็นป่าไม้ แต่ปัจจุบันดันถูกใช้เป็นอย่างอื่น (สีที่แสดงคือการใช้ที่ดินจริง ณ จุดนั้น)' },
   { target:'.swipe-box', title:'เปรียบเทียบ (Swipe)',
-    body:'เปิดใช้งานแล้วลากเส้นแบ่งกลางแผนที่ เพื่อเทียบความเหมาะสมรวมหรือความสอดคล้อง ระหว่าง Natural Breaks กับ Manual Interval' },
+    body:'เปิดใช้งานแล้วลากเส้นแบ่งกลางแผนที่ เพื่อเทียบความเหมาะสมรวมหรือความสอดคล้อง ระหว่างคะแนนดิบกับ Normalize' },
   { target:'#bound-list', title:'เขตการปกครอง',
     body:'เปิดเส้นขอบเขตจังหวัด/อำเภอ/ตำบล แล้ววางเมาส์หรือคลิก เพื่อดูสัดส่วนพื้นที่แต่ละประเภทในเขตนั้น' },
   { target:'.grid-info-box', title:'ข้อมูลกริด 200 เมตร',
