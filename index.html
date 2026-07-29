@@ -561,7 +561,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 37;
+const DATA_VERSION = 39;
 
 // Score type is fixed to raw only (Normalize removed). Method (Natural
 // Breaks vs Manual) is restored -- combine into one of 2 datasets
@@ -1240,6 +1240,11 @@ let cellRect=null;
 let gridBytes=null; // whole grid_attr.bin loaded once, not fetched per click
 let tambonIndexArr=null; // whole tambon_index.bin loaded once (Uint16Array, same NR x NC grid)
 let tambonLookup=null;   // [{i,t,d,p,r0,r1,c0,c1}, ...] -- one row per unique tambon
+let provinceAllocPct=null; // {code: {"1":pct,"2":pct,"3":pct,"4":pct}} -- precomputed
+  // nationwide (from the Excel suitability workbook's per-province table),
+  // dataset-independent and outside South's live grid entirely -- fallback
+  // for clicking a province with no grid_attr.bin coverage (i.e. outside
+  // South, since the live grid only spans the South dataset's own extent)
 
 // grid_attr.bin is per-dataset (its 7 fields come from that dataset's own
 // tifs); cached per dataset so switching back and forth doesn't re-fetch.
@@ -1275,6 +1280,10 @@ async function initGrid(){
     if(lookupRes.ok) tambonLookup=await lookupRes.json();
   }catch(e){ console.warn('tambon_index.bin / tambon_lookup.json not found'); }
   finally{ setLoading(false); }
+  try{
+    const r=await fetch(`data/province_alloc_pct.json?v=${DATA_VERSION}`);
+    if(r.ok) provinceAllocPct=await r.json();
+  }catch(e){ console.warn('province_alloc_pct.json not found'); }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1399,6 +1408,23 @@ function showZonalStats(levelTitle,name,levelKey,code,fromClick){
     if(myId!==zonalReqId) return;
     const pinBadge=`<span id="zp-pin-badge" class="zp-pin-badge${zonalPinned?' pinned':''}" onclick="toggleZonalPin()">${zonalPinned?'ล็อกอยู่':'ปักหมุด'}</span>`;
     if(!stats||!stats.total){
+      // outside South's own live grid entirely (e.g. a province from the
+      // nationwide boundary layer) -- fall back to the precomputed
+      // nationwide Alloc breakdown from the Excel suitability workbook
+      const allocPct=levelKey==='p'&&provinceAllocPct&&provinceAllocPct[code];
+      if(allocPct){
+        const counts={};
+        for(const k in allocPct) counts[k]=Math.round(allocPct[k]*10); // synthetic counts out of ~1000, same shape zpSection expects
+        panel.innerHTML=`<button class="zp-close" onclick="closeZonalPanel()">✕</button>
+          <div class="zp-title">${levelTitle}: ${name}</div>
+          <div class="zp-sub">
+            <span>ข้อมูลระดับประเทศ (ประมวลผลล่วงหน้า ไม่ใช่กริดสด)</span>
+            ${pinBadge}
+          </div>
+          ${zpSection('การใช้ที่ดินตามศักยภาพ',counts,ALLOC_LBL,ALLOC_CLR,1000)}
+        `;
+        return;
+      }
       panel.innerHTML=`<button class="zp-close" onclick="closeZonalPanel()">✕</button>
         <div class="zp-title">${levelTitle}: ${name}</div>
         <div class="zp-sub">ไม่พบข้อมูลกริดในพื้นที่นี้ ${pinBadge}</div>`;
