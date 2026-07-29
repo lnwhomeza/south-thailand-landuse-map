@@ -561,7 +561,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 40;
+const DATA_VERSION = 41;
 
 // Score type is fixed to raw only (Normalize removed). Method (Natural
 // Breaks vs Manual) is restored -- combine into one of 2 datasets
@@ -619,6 +619,7 @@ const LAYERS = [
       2:{color:'#f1c40f',label:'เหมาะสมปานกลาง'},
       3:{color:'#8bc34a',label:'เหมาะสมมาก'},
       4:{color:'#1e8449',label:'เหมาะสมมากที่สุด'},
+      5:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
     }
   },
   { id:'WO_Agri', title:'ระดับความเหมาะสม เกษตร', icon:'', group:'suit',
@@ -628,6 +629,7 @@ const LAYERS = [
       2:{color:'#f1c40f',label:'เหมาะสมปานกลาง'},
       3:{color:'#8bc34a',label:'เหมาะสมมาก'},
       4:{color:'#1e8449',label:'เหมาะสมมากที่สุด'},
+      5:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
     }
   },
   { id:'WO_Community', title:'ระดับความเหมาะสม ชุมชน', icon:'', group:'suit',
@@ -637,6 +639,7 @@ const LAYERS = [
       2:{color:'#f1c40f',label:'เหมาะสมปานกลาง'},
       3:{color:'#8bc34a',label:'เหมาะสมมาก'},
       4:{color:'#1e8449',label:'เหมาะสมมากที่สุด'},
+      5:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
     }
   },
   { id:'WO_Industrial', title:'ระดับความเหมาะสม อุตสาหกรรม', icon:'', group:'suit',
@@ -646,6 +649,7 @@ const LAYERS = [
       2:{color:'#f1c40f',label:'เหมาะสมปานกลาง'},
       3:{color:'#8bc34a',label:'เหมาะสมมาก'},
       4:{color:'#1e8449',label:'เหมาะสมมากที่สุด'},
+      5:{color:'#2980b9',label:'พื้นที่ชุ่มน้ำ'},
     }
   },
   { id:'Incons_Forest', title:'ศักยภาพการใช้ที่ดิน ป่าไม้', icon:'', group:'incons',
