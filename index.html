@@ -194,9 +194,9 @@ body{display:flex}
   cursor:pointer;outline:none
 }
 .swipe-sel:disabled{opacity:.5;cursor:not-allowed}
-/* optgroup label (Thai layer name) large & bold; the score-type (raw/normalize)
-   options underneath it smaller -- browser support for styling the
-   native <select> popup this way varies, but is solid in Chrome/Edge/Firefox */
+/* optgroup label (Thai layer name) large & bold; the option underneath it
+   smaller -- browser support for styling the native <select> popup this
+   way varies, but is solid in Chrome/Edge/Firefox */
 .swipe-sel optgroup{font-size:14px;font-weight:700;font-style:normal;color:var(--text0)}
 .swipe-sel option{font-size:11px;font-weight:400;color:var(--text1)}
 .swipe-fixed{
@@ -461,13 +461,13 @@ body{display:flex}
   </div>
 
   <div id="sb-body">
-    <!-- Dataset: score type (raw/normalize) x classification method.
-         Method is fixed to Natural Breaks only (Manual removed) -- combine
-         into one of 2 datasets (raw_natural_breaks, normalize_natural_breaks) -->
+    <!-- Dataset: single fixed dataset now (raw_natural_breaks) -- Normalize
+         and Manual both removed, only Natural Breaks remains. Kept as a
+         (non-toggling) label pill rather than removing the section, so the
+         sidebar still shows what analysis method the map represents. -->
     <div class="sec-hd">ชุดข้อมูล</div>
     <div class="base-wrap" id="scoretype-wrap">
-      <label class="base-pill active"><input type="radio" name="scoretype" value="raw" checked>คะแนนดิบ</label>
-      <label class="base-pill"><input type="radio" name="scoretype" value="normalize">Normalize</label>
+      <label class="base-pill active"><input type="radio" name="scoretype" value="raw" checked>Natural Breaks</label>
     </div>
 
     <!-- Base map -->
@@ -560,20 +560,20 @@ body{display:flex}
 // (this is exactly what caused a just-pushed data fix to still look broken).
 const DATA_VERSION = 31;
 
-// Dataset = score type (raw score vs normalize) x classification method,
-// method fixed to Natural Breaks only (Manual removed). Both score types
-// share one grid (same transform/dimensions/pixel mask), so only the
-// per-dataset tifs + grid_attr.bin live under their own subfolder
-// (data/<scoretype>_natural_breaks/); grid_meta.json / tambon_index.bin /
+// Dataset is now fixed to a single combination (raw_natural_breaks) --
+// Normalize and Manual have both been removed. Kept as a 1-element array
+// (rather than hardcoding the path) so the rest of the code below --
+// dataset-keyed cache, swipe dropdown builder -- doesn't need special-casing.
+// Data lives under data/raw_natural_breaks/; grid_meta.json / tambon_index.bin /
 // tambon_lookup.json / bound_*.geojson are dataset-independent and stay
 // shared at the top of data/.
-const SCORE_TYPES = ['raw','normalize'];
+const SCORE_TYPES = ['raw'];
 const METHODS = ['natural_breaks'];
-const SCORE_TYPE_LABELS = { raw:'คะแนนดิบ', normalize:'Normalize' };
+const SCORE_TYPE_LABELS = { raw:'Natural Breaks' };
 const METHOD_LABELS = { natural_breaks:'Natural Breaks' };
-const DATASET_LABELS = {}; // "<scoretype>_<method>" -> "คะแนนดิบ - Natural Breaks" style combined label
+const DATASET_LABELS = {}; // "<scoretype>_<method>" -> display label
 SCORE_TYPES.forEach(st=>METHODS.forEach(m=>{
-  DATASET_LABELS[`${st}_${m}`]=`${SCORE_TYPE_LABELS[st]} - ${METHOD_LABELS[m]}`;
+  DATASET_LABELS[`${st}_${m}`]=METHOD_LABELS[m];
 }));
 let currentScoreType='raw', currentMethod='natural_breaks';
 function currentDatasetKey(){ return `${currentScoreType}_${currentMethod}`; }
@@ -741,49 +741,9 @@ document.getElementById('base-wrap').querySelectorAll('.base-pill').forEach(el=>
   });
 });
 
-// Dataset pill switch -- 2 independent rows (score type, method) combine
-// into one of 4 datasets. Rather than try to reload each currently-on
-// layer in place (which looked like it was still showing the old
-// dataset's data), just turn everything off -- the user re-toggles
-// whatever they want to see, which always fetches fresh via the normal
-// ensureLoaded/buildGeoLayer path (already correctly keyed by dataset).
-async function reloadForDatasetChange(){
-  map.closePopup();
-  if(cellRect){ map.removeLayer(cellRect); cellRect=null; }
-
-  for(const cfg of LAYERS){
-    if(!layerOn[cfg.id]) continue;
-    if(geoLayers[cfg.id]) map.removeLayer(geoLayers[cfg.id]);
-    geoLayers[cfg.id]=null; // must clear, not just remove from map -- otherwise
-                            // re-toggling this layer on reuses the stale instance
-                            // (built from the OLD dataset's cached georaster)
-    layerOn[cfg.id]=false;
-    const card=document.getElementById('card-'+cfg.id);
-    card?.querySelector('.lc-toggle')?.classList.remove('on');
-    card?.classList.remove('active');
-  }
-
-  await loadGridAttr();
-
-  if(lastZonal&&document.getElementById('zonal-panel').classList.contains('open')){
-    showZonalStats(lastZonal.levelTitle,lastZonal.name,lastZonal.levelKey,lastZonal.code,zonalPinned);
-  }
-
-  // NOTE: the swipe tool's own per-side dataset selects are intentionally
-  // left untouched here -- they're an independent choice from this main
-  // tab (that's the whole point: comparing across datasets, not just layers)
-}
-
-document.getElementById('scoretype-wrap').querySelectorAll('.base-pill').forEach(el=>{
-  el.addEventListener('click',async()=>{
-    const val=el.querySelector('input').value;
-    if(val===currentScoreType) return;
-    document.querySelectorAll('#scoretype-wrap .base-pill').forEach(p=>p.classList.remove('active'));
-    el.classList.add('active');
-    currentScoreType=val;
-    await reloadForDatasetChange();
-  });
-});
+// Dataset is now fixed to a single combination, so the pill-switch handlers
+// that used to call reloadForDatasetChange() on every score-type/method
+// change (and that function itself) have been removed.
 
 map.on('mousemove',e=>{
   document.getElementById('statusbar').textContent=
@@ -991,9 +951,9 @@ function buildSidebar(){
 // ─────────────────────────────────────────────────────────────────────────────
 let swipeOn=false;
 let swipeLeftId=null, swipeRightId=null;
-let swipeLeftDataset=null, swipeRightDataset=null; // per-side dataset override,
-  // independent of the main "ชุดข้อมูล" tab -- lets each side show a different
-  // score type (e.g. raw score left vs Normalize right)
+let swipeLeftDataset=null, swipeRightDataset=null; // per-side dataset override --
+  // vestigial now that only one dataset exists, kept so ensureLoaded/
+  // buildGeoLayer's cacheKey(id,dataset) signature doesn't need special-casing
 let swipeLeftLayer=null, swipeRightLayer=null;
 let swipeDividerFrac=0.5; // 0..1, fraction of map width from the left edge
 
@@ -1074,16 +1034,16 @@ function buildSwipeControls(){
 
   // Right side is one grouped dropdown: each of the two outputs that actually
   // change between datasets (Alloc_LU, LU_Consistency) is a non-selectable
-  // <optgroup> header, with all 4 score-type x method combinations as the
-  // selectable options underneath it -- so picking an option sets BOTH the
-  // layer and the dataset in one click. The option value packs both as
+  // <optgroup> header, with the (now single) dataset as the selectable
+  // option underneath it -- so picking an option sets BOTH the layer and
+  // the dataset in one click. The option value packs both as
   // "<layerId>::<datasetKey>".
   const SWIPE_RIGHT_IDS=['Alloc_LU','LU_Consistency'];
   const rightSel=document.getElementById('swipe-right-sel');
-  // Option text repeats the layer name ("ความเหมาะสมรวม - คะแนนดิบ - Natural
-  // Breaks") rather than just the dataset name -- a native <select>'s closed
-  // box can only ever show the selected <option>'s own text, never the
-  // optgroup label above it, so the full context has to live in the option.
+  // Option text repeats the layer name ("ความเหมาะสมรวม - Natural Breaks")
+  // rather than just the dataset name -- a native <select>'s closed box can
+  // only ever show the selected <option>'s own text, never the optgroup
+  // label above it, so the full context has to live in the option.
   const datasetKeys=SCORE_TYPES.flatMap(st=>METHODS.map(m=>`${st}_${m}`));
   const groupsHtml=SWIPE_RIGHT_IDS.map(id=>{
     const cfg=LAYERS.find(l=>l.id===id);
@@ -1546,8 +1506,6 @@ async function fetchWithProgress(url,onProgress){
 const TUTORIAL_STEPS=[
   { target:null, title:'ยินดีต้อนรับ',
     body:'แผนที่นี้แสดงศักยภาพการใช้ที่ดินภาคใต้ ลองดูขั้นตอนสั้นๆ นี้เพื่อรู้จักฟีเจอร์หลักของเว็บกัน' },
-  { target:'#scoretype-wrap', title:'ประเภทคะแนน',
-    body:'เลือกระหว่างคะแนนดิบ (ก่อนปรับสเกล) กับ Normalize (ปรับสเกลคะแนนแล้ว) ของแบบจำลองความเหมาะสม' },
   { target:'#base-wrap', title:'แผนที่พื้นหลัง',
     body:'สลับพื้นหลังแผนที่ได้ 3 แบบ: OSM, Dark และภาพถ่ายดาวเทียม' },
   { target:'#card-LU_classify', title:'การใช้ที่ดินปัจจุบัน',
@@ -1561,7 +1519,7 @@ const TUTORIAL_STEPS=[
   { target:'#group-wrap-incons', title:'ความไม่สอดคล้อง',
     body:'โฟกัสเฉพาะจุดที่ "ไม่เหมือนกัน" เท่านั้น (จากช่องความสอดคล้อง) แยกตามว่าโมเดลแนะนำให้เป็นประเภทไหน เช่น "ความไม่สอดคล้อง ป่าไม้" คือจุดที่โมเดลบอกว่าควรเป็นป่าไม้ แต่ปัจจุบันดันถูกใช้เป็นอย่างอื่น (สีที่แสดงคือการใช้ที่ดินจริง ณ จุดนั้น)' },
   { target:'.swipe-box', title:'เปรียบเทียบ (Swipe)',
-    body:'เปิดใช้งานแล้วลากเส้นแบ่งกลางแผนที่ เพื่อเทียบความเหมาะสมรวมหรือความสอดคล้อง ระหว่างคะแนนดิบกับ Normalize' },
+    body:'เปิดใช้งานแล้วลากเส้นแบ่งกลางแผนที่ เพื่อเทียบ "การใช้ที่ดินปัจจุบัน" กับ "ความเหมาะสมรวม" หรือ "ความสอดคล้อง"' },
   { target:'#bound-list', title:'เขตการปกครอง',
     body:'เปิดเส้นขอบเขตจังหวัด/อำเภอ/ตำบล แล้ววางเมาส์หรือคลิก เพื่อดูสัดส่วนพื้นที่แต่ละประเภทในเขตนั้น' },
   { target:'.grid-info-box', title:'ข้อมูลกริด 200 เมตร',
