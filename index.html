@@ -461,13 +461,16 @@ body{display:flex}
   </div>
 
   <div id="sb-body">
-    <!-- Dataset: single fixed dataset now (raw_natural_breaks) -- Normalize
-         and Manual both removed, only Natural Breaks remains. Kept as a
-         (non-toggling) label pill rather than removing the section, so the
-         sidebar still shows what analysis method the map represents. -->
+    <!-- Dataset: score type fixed to raw only (Normalize removed) x
+         classification method (Natural Breaks / Manual, restored) --
+         combine into one of 2 datasets (raw_natural_breaks, raw_manual) -->
     <div class="sec-hd">ชุดข้อมูล</div>
     <div class="base-wrap" id="scoretype-wrap">
-      <label class="base-pill active"><input type="radio" name="scoretype" value="raw" checked>Natural Breaks</label>
+      <label class="base-pill active"><input type="radio" name="scoretype" value="raw" checked>คะแนนดิบ</label>
+    </div>
+    <div class="base-wrap" id="method-wrap">
+      <label class="base-pill active"><input type="radio" name="method" value="natural_breaks" checked>Natural Breaks</label>
+      <label class="base-pill"><input type="radio" name="method" value="manual">Manual</label>
     </div>
 
     <!-- Base map -->
@@ -558,20 +561,19 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 36;
+const DATA_VERSION = 37;
 
-// Dataset is now fixed to a single combination (raw_natural_breaks) --
-// Normalize and Manual have both been removed. Kept as a 1-element array
-// (rather than hardcoding the path) so the rest of the code below --
-// dataset-keyed cache, swipe dropdown builder -- doesn't need special-casing.
-// Data lives under data/raw_natural_breaks/; grid_meta.json / tambon_index.bin /
-// tambon_lookup.json / bound_*.geojson are dataset-independent and stay
-// shared at the top of data/.
+// Score type is fixed to raw only (Normalize removed). Method (Natural
+// Breaks vs Manual) is restored -- combine into one of 2 datasets
+// (raw_natural_breaks, raw_manual). Data lives under data/<scoretype>_<method>/;
+// grid_meta.json / tambon_index.bin / tambon_lookup.json / bound_*.geojson
+// are dataset-independent and stay shared at the top of data/.
 const SCORE_TYPES = ['raw'];
-const METHODS = ['natural_breaks'];
-const SCORE_TYPE_LABELS = { raw:'Natural Breaks' };
-const METHOD_LABELS = { natural_breaks:'Natural Breaks' };
-const DATASET_LABELS = {}; // "<scoretype>_<method>" -> display label
+const METHODS = ['natural_breaks','manual'];
+const SCORE_TYPE_LABELS = { raw:'คะแนนดิบ' };
+const METHOD_LABELS = { natural_breaks:'Natural Breaks', manual:'Manual' };
+const DATASET_LABELS = {}; // "<scoretype>_<method>" -> display label (score
+  // type dropped since it's constant -- just the method name)
 SCORE_TYPES.forEach(st=>METHODS.forEach(m=>{
   DATASET_LABELS[`${st}_${m}`]=METHOD_LABELS[m];
 }));
@@ -741,9 +743,50 @@ document.getElementById('base-wrap').querySelectorAll('.base-pill').forEach(el=>
   });
 });
 
-// Dataset is now fixed to a single combination, so the pill-switch handlers
-// that used to call reloadForDatasetChange() on every score-type/method
-// change (and that function itself) have been removed.
+// Dataset pill switch -- method (Natural Breaks/Manual) restored; score
+// type stays fixed to raw (Normalize removed) so no listener needed there.
+// Rather than try to reload each currently-on layer in place (which looked
+// like it was still showing the old dataset's data), just turn everything
+// off -- the user re-toggles whatever they want to see, which always
+// fetches fresh via the normal ensureLoaded/buildGeoLayer path (already
+// correctly keyed by dataset).
+async function reloadForDatasetChange(){
+  map.closePopup();
+  if(cellRect){ map.removeLayer(cellRect); cellRect=null; }
+
+  for(const cfg of LAYERS){
+    if(!layerOn[cfg.id]) continue;
+    if(geoLayers[cfg.id]) map.removeLayer(geoLayers[cfg.id]);
+    geoLayers[cfg.id]=null; // must clear, not just remove from map -- otherwise
+                            // re-toggling this layer on reuses the stale instance
+                            // (built from the OLD dataset's cached georaster)
+    layerOn[cfg.id]=false;
+    const card=document.getElementById('card-'+cfg.id);
+    card?.querySelector('.lc-toggle')?.classList.remove('on');
+    card?.classList.remove('active');
+  }
+
+  await loadGridAttr();
+
+  if(lastZonal&&document.getElementById('zonal-panel').classList.contains('open')){
+    showZonalStats(lastZonal.levelTitle,lastZonal.name,lastZonal.levelKey,lastZonal.code,zonalPinned);
+  }
+
+  // NOTE: the swipe tool's own per-side dataset selects are intentionally
+  // left untouched here -- they're an independent choice from this main
+  // tab (that's the whole point: comparing across datasets, not just layers)
+}
+
+document.getElementById('method-wrap').querySelectorAll('.base-pill').forEach(el=>{
+  el.addEventListener('click',async()=>{
+    const val=el.querySelector('input').value;
+    if(val===currentMethod) return;
+    document.querySelectorAll('#method-wrap .base-pill').forEach(p=>p.classList.remove('active'));
+    el.classList.add('active');
+    currentMethod=val;
+    await reloadForDatasetChange();
+  });
+});
 
 map.on('mousemove',e=>{
   document.getElementById('statusbar').textContent=
@@ -951,9 +994,9 @@ function buildSidebar(){
 // ─────────────────────────────────────────────────────────────────────────────
 let swipeOn=false;
 let swipeLeftId=null, swipeRightId=null;
-let swipeLeftDataset=null, swipeRightDataset=null; // per-side dataset override --
-  // vestigial now that only one dataset exists, kept so ensureLoaded/
-  // buildGeoLayer's cacheKey(id,dataset) signature doesn't need special-casing
+let swipeLeftDataset=null, swipeRightDataset=null; // per-side dataset override,
+  // independent of the main "ชุดข้อมูล" tab -- lets each side show a different
+  // classification method (e.g. Natural Breaks left vs Manual Interval right)
 let swipeLeftLayer=null, swipeRightLayer=null;
 let swipeDividerFrac=0.5; // 0..1, fraction of map width from the left edge
 
@@ -1034,9 +1077,9 @@ function buildSwipeControls(){
 
   // Right side is one grouped dropdown: each of the two outputs that actually
   // change between datasets (Alloc_LU, LU_Consistency) is a non-selectable
-  // <optgroup> header, with the (now single) dataset as the selectable
-  // option underneath it -- so picking an option sets BOTH the layer and
-  // the dataset in one click. The option value packs both as
+  // <optgroup> header, with each method (Natural Breaks/Manual) as a
+  // selectable option underneath it -- so picking an option sets BOTH the
+  // layer and the dataset in one click. The option value packs both as
   // "<layerId>::<datasetKey>".
   const SWIPE_RIGHT_IDS=['Alloc_LU','LU_Consistency'];
   const rightSel=document.getElementById('swipe-right-sel');
@@ -1506,6 +1549,8 @@ async function fetchWithProgress(url,onProgress){
 const TUTORIAL_STEPS=[
   { target:null, title:'ยินดีต้อนรับ',
     body:'แผนที่นี้แสดงศักยภาพการใช้ที่ดินภาคใต้ ลองดูขั้นตอนสั้นๆ นี้เพื่อรู้จักฟีเจอร์หลักของเว็บกัน' },
+  { target:'#method-wrap', title:'วิธีจัดกลุ่ม',
+    body:'เลือกวิธีจัดกลุ่มคะแนนความเหมาะสม ระหว่าง Natural Breaks (แบ่งกลุ่มตามการกระจายของข้อมูลจริง) กับ Manual (แบ่งกลุ่มตามช่วงคะแนนที่กำหนดเอง)' },
   { target:'#base-wrap', title:'แผนที่พื้นหลัง',
     body:'สลับพื้นหลังแผนที่ได้ 3 แบบ: OSM, Dark และภาพถ่ายดาวเทียม' },
   { target:'#card-LU_classify', title:'การใช้ที่ดินปัจจุบัน',
@@ -1519,7 +1564,7 @@ const TUTORIAL_STEPS=[
   { target:'#group-wrap-incons', title:'ความไม่สอดคล้อง',
     body:'โฟกัสเฉพาะจุดที่ "ไม่เหมือนกัน" เท่านั้น (จากช่องความสอดคล้อง) แยกตามว่าโมเดลแนะนำให้เป็นประเภทไหน เช่น "ความไม่สอดคล้อง ป่าไม้" คือจุดที่โมเดลบอกว่าควรเป็นป่าไม้ แต่ปัจจุบันดันถูกใช้เป็นอย่างอื่น (สีที่แสดงคือการใช้ที่ดินจริง ณ จุดนั้น)' },
   { target:'.swipe-box', title:'เปรียบเทียบ (Swipe)',
-    body:'เปิดใช้งานแล้วลากเส้นแบ่งกลางแผนที่ เพื่อเทียบ "การใช้ที่ดินปัจจุบัน" กับ "ความเหมาะสมรวม" หรือ "ความสอดคล้อง"' },
+    body:'เปิดใช้งานแล้วลากเส้นแบ่งกลางแผนที่ เพื่อเทียบความเหมาะสมรวมหรือความสอดคล้อง ระหว่าง Natural Breaks กับ Manual Interval' },
   { target:'#bound-list', title:'เขตการปกครอง',
     body:'เปิดเส้นขอบเขตจังหวัด/อำเภอ/ตำบล แล้ววางเมาส์หรือคลิก เพื่อดูสัดส่วนพื้นที่แต่ละประเภทในเขตนั้น' },
   { target:'.grid-info-box', title:'ข้อมูลกริด 200 เมตร',
