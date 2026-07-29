@@ -561,7 +561,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 39;
+const DATA_VERSION = 40;
 
 // Score type is fixed to raw only (Normalize removed). Method (Natural
 // Breaks vs Manual) is restored -- combine into one of 2 datasets
@@ -1240,11 +1240,14 @@ let cellRect=null;
 let gridBytes=null; // whole grid_attr.bin loaded once, not fetched per click
 let tambonIndexArr=null; // whole tambon_index.bin loaded once (Uint16Array, same NR x NC grid)
 let tambonLookup=null;   // [{i,t,d,p,r0,r1,c0,c1}, ...] -- one row per unique tambon
-let provinceAllocPct=null; // {code: {"1":pct,"2":pct,"3":pct,"4":pct}} -- precomputed
-  // nationwide (from the Excel suitability workbook's per-province table),
-  // dataset-independent and outside South's live grid entirely -- fallback
-  // for clicking a province with no grid_attr.bin coverage (i.e. outside
-  // South, since the live grid only spans the South dataset's own extent)
+let provinceAllocPct=null; // {code: {"1":pct,"2":pct,"3":pct,"4":pct}} -- Alloc
+let provinceWoPct=null;    // {code: {F2:{...},A2:{...},U2:{...},Ind2:{...}}} -- per-category
+  // suitability level. Both precomputed nationwide directly from the same
+  // national rasters rendered on the map (Alloc_National.img, Forest/Agri/
+  // Commu/Industrial_National.img), NOT from the older Excel workbook
+  // numbers, so they always agree with what's drawn. Fallback for clicking
+  // a province with no grid_attr.bin coverage (i.e. outside South, since
+  // the live grid only spans the South dataset's own extent)
 
 // grid_attr.bin is per-dataset (its 7 fields come from that dataset's own
 // tifs); cached per dataset so switching back and forth doesn't re-fetch.
@@ -1284,6 +1287,10 @@ async function initGrid(){
     const r=await fetch(`data/province_alloc_pct.json?v=${DATA_VERSION}`);
     if(r.ok) provinceAllocPct=await r.json();
   }catch(e){ console.warn('province_alloc_pct.json not found'); }
+  try{
+    const r=await fetch(`data/province_wo_pct.json?v=${DATA_VERSION}`);
+    if(r.ok) provinceWoPct=await r.json();
+  }catch(e){ console.warn('province_wo_pct.json not found'); }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1346,7 +1353,7 @@ function zpSection(title,counts,labelMap,colorMap,total){
     return `<div class="zp-row">
         <span class="zp-dot" style="background:${color}"></span>
         <span class="zp-label">${label}</span>
-        <span class="zp-pct">${pct.toFixed(1)}%</span>
+        <span class="zp-pct">${pct.toFixed(2)}%</span>
       </div>
       <div class="zp-bar-track"><div class="zp-bar-fill" style="width:${pct}%;background:${color}"></div></div>`;
   }).join('');
@@ -1362,7 +1369,7 @@ function zpSection(title,counts,labelMap,colorMap,total){
       <div class="zp-top-summary" onclick="toggleZpSection(this.previousElementSibling,'${title}')">
         <span class="zp-dot" style="background:${topColor}"></span>
         <span class="zp-label">${topLabel}</span>
-        <span class="zp-pct">${topPct.toFixed(1)}%</span>
+        <span class="zp-pct">${topPct.toFixed(2)}%</span>
       </div>
       <div class="zp-section-body">${rows}</div>
     </div>`;
@@ -1410,18 +1417,30 @@ function showZonalStats(levelTitle,name,levelKey,code,fromClick){
     if(!stats||!stats.total){
       // outside South's own live grid entirely (e.g. a province from the
       // nationwide boundary layer) -- fall back to the precomputed
-      // nationwide Alloc breakdown from the Excel suitability workbook
-      const allocPct=levelKey==='p'&&provinceAllocPct&&provinceAllocPct[code];
-      if(allocPct){
+      // nationwide breakdown, computed directly from the same national
+      // rasters rendered on the map (Alloc_National.img, Forest/Agri/Commu/
+      // Industrial_National.img), so it always agrees with what's drawn.
+      // *100 (not *10) + total=10000 so the round-trip through zpSection's
+      // count/total*100 preserves the source data's 2-decimal precision.
+      const pctToCounts=pct=>{
         const counts={};
-        for(const k in allocPct) counts[k]=Math.round(allocPct[k]*10); // synthetic counts out of ~1000, same shape zpSection expects
+        for(const k in pct) counts[k]=Math.round(pct[k]*100);
+        return counts;
+      };
+      const allocPct=levelKey==='p'&&provinceAllocPct&&provinceAllocPct[code];
+      const woPct=levelKey==='p'&&provinceWoPct&&provinceWoPct[code];
+      if(allocPct||woPct){
         panel.innerHTML=`<button class="zp-close" onclick="closeZonalPanel()">✕</button>
           <div class="zp-title">${levelTitle}: ${name}</div>
           <div class="zp-sub">
-            <span>ข้อมูลระดับประเทศ (ประมวลผลล่วงหน้า ไม่ใช่กริดสด)</span>
+            <span>ข้อมูลระดับประเทศ (ประมวลผลล่วงหน้าจากกริดเดียวกับที่แสดงบนแผนที่ ไม่ใช่กริดสด)</span>
             ${pinBadge}
           </div>
-          ${zpSection('การใช้ที่ดินตามศักยภาพ',counts,ALLOC_LBL,ALLOC_CLR,1000)}
+          ${allocPct?zpSection('การใช้ที่ดินตามศักยภาพ',pctToCounts(allocPct),ALLOC_LBL,ALLOC_CLR,10000):''}
+          ${woPct?zpSection('ระดับความเหมาะสม ป่าไม้',pctToCounts(woPct.F2),WO_LBL,WO_CLR,10000):''}
+          ${woPct?zpSection('ระดับความเหมาะสม เกษตร',pctToCounts(woPct.A2),WO_LBL,WO_CLR,10000):''}
+          ${woPct?zpSection('ระดับความเหมาะสม เมืองและชุมชน',pctToCounts(woPct.U2),WO_LBL,WO_CLR,10000):''}
+          ${woPct?zpSection('ระดับความเหมาะสม อุตสาหกรรม',pctToCounts(woPct.Ind2),WO_LBL,WO_CLR,10000):''}
         `;
         return;
       }
