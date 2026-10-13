@@ -1242,13 +1242,15 @@ function buildBoundList(){
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Land allocation zones -- filled polygons, South only.
-//  คทช. ป่าสงวน = RFD parcels from AREA_NLB (มติ ครม. 22 ธ.ค. 2558) + AREA_NLB_G3
-//  (มติ ครม. 26 พ.ย. 2561); สปก. = ALRO_South (one polygon per province).
+//  คทช. = AREA_NLB (all land types, มติ ครม. 22 ธ.ค. 2558); ป่าสงวนแห่งชาติ =
+//  AREA_NLB_G3 (มติ ครม. 26 พ.ย. 2561); สปก. = ALRO_South (one polygon per province).
 //  Clicks bubble to the map so the grid popup still opens; the popup then
 //  lists whichever loaded zones contain the clicked point (zoneHits).
 // ─────────────────────────────────────────────────────────────────────────────
 const ZONES=[
-  { id:'nlb', title:'คทช. ป่าสงวนแห่งชาติ', file:'data/zone_nlb_forest.geojson', color:'#0b7a3e', fillOpacity:0.30,
+  { id:'knc', title:'พื้นที่ คทช.', file:'data/zone_knc.geojson', color:'#8e44ad', fillOpacity:0.30,
+    info:p=>[p.name, p.type, p.res, p.phase&&p.phase.replace('Phase_','ระยะที่ '), p.cert&&`หนังสืออนุญาต ${p.cert}`] },
+  { id:'forest', title:'ป่าสงวนแห่งชาติ', file:'data/zone_forest_reserve.geojson', color:'#0b7a3e', fillOpacity:0.25,
     info:p=>[p.name, p.res, p.phase&&p.phase.replace('Phase_','ระยะที่ '), p.cert&&`หนังสืออนุญาต ${p.cert}`] },
   { id:'alro', title:'เขตปฏิรูปที่ดิน (สปก.)', file:'data/zone_alro.geojson', color:'#e67e22', fillOpacity:0.25,
     info:p=>[`สปก. ${p.name}`] },
@@ -1724,7 +1726,7 @@ const TUTORIAL_STEPS=[
   { target:'#bound-list', title:'เขตการปกครอง',
     body:'เปิดเส้นขอบเขตจังหวัด/อำเภอ/ตำบล แล้ววางเมาส์หรือคลิก เพื่อดูสัดส่วนพื้นที่แต่ละประเภทในเขตนั้น' },
   { target:'#zone-list', title:'พื้นที่จัดที่ดิน',
-    body:'แสดงพื้นที่ คทช. ในเขตป่าสงวนแห่งชาติ และเขตปฏิรูปที่ดิน (สปก.) ในภาคใต้ เปิดแล้วคลิกบนแผนที่ ป๊อปอัปจะบอกว่าจุดนั้นอยู่ในแปลงไหน' },
+    body:'แสดงพื้นที่ คทช., ป่าสงวนแห่งชาติ และเขตปฏิรูปที่ดิน (สปก.) ในภาคใต้ เปิดแล้วคลิกบนแผนที่ ป๊อปอัปจะบอกว่าจุดนั้นอยู่ในแปลงไหน' },
   { target:'.grid-info-box', title:'ข้อมูลกริด 200 เมตร',
     body:'คลิกที่ใดก็ได้บนแผนที่ เพื่อดูข้อมูลของกริดจุดนั้นแบบละเอียด' },
 ];
