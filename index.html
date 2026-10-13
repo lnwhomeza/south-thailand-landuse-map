@@ -506,6 +506,10 @@ body{display:flex}
     <div class="sec-hd">เขตการปกครอง</div>
     <div id="bound-list"></div>
 
+    <!-- Land allocation zones (คทช. / สปก.) -->
+    <div class="sec-hd">พื้นที่จัดที่ดิน</div>
+    <div id="zone-list"></div>
+
     <!-- Grid info -->
     <div class="sec-hd">Grid 200m</div>
     <div class="grid-info-box">
@@ -561,7 +565,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 41;
+const DATA_VERSION = 42;
 
 // Score type is fixed to raw only (Normalize removed). Method (Natural
 // Breaks vs Manual) is restored -- combine into one of 2 datasets
@@ -1237,6 +1241,108 @@ function buildBoundList(){
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Land allocation zones -- filled polygons, South only.
+//  คทช. ป่าสงวน = RFD parcels from AREA_NLB (มติ ครม. 22 ธ.ค. 2558) + AREA_NLB_G3
+//  (มติ ครม. 26 พ.ย. 2561); สปก. = ALRO_South (one polygon per province).
+//  Clicks bubble to the map so the grid popup still opens; the popup then
+//  lists whichever loaded zones contain the clicked point (zoneHits).
+// ─────────────────────────────────────────────────────────────────────────────
+const ZONES=[
+  { id:'nlb', title:'คทช. ป่าสงวนแห่งชาติ', file:'data/zone_nlb_forest.geojson', color:'#0b7a3e', fillOpacity:0.30,
+    info:p=>[p.name, p.res, p.phase&&p.phase.replace('Phase_','ระยะที่ '), p.cert&&`หนังสืออนุญาต ${p.cert}`] },
+  { id:'alro', title:'เขตปฏิรูปที่ดิน (สปก.)', file:'data/zone_alro.geojson', color:'#e67e22', fillOpacity:0.25,
+    info:p=>[`สปก. ${p.name}`] },
+];
+const zoneLayers={}, zoneOn={}, zoneData={};
+
+function buildZoneList(){
+  const list=document.getElementById('zone-list');
+  ZONES.forEach(cfg=>{
+    zoneOn[cfg.id]=false;
+    const row=document.createElement('div');
+    row.className='bound-row';
+    row.innerHTML=`
+      <label class="bound-swatch-wrap" title="คลิกเพื่อเปลี่ยนสี">
+        <span class="bound-swatch" style="background:${cfg.color}"></span>
+        <input type="color" value="${cfg.color}" class="bound-cp">
+      </label>
+      <span class="bound-name">${cfg.title}</span>
+      <div class="lc-toggle"></div>
+    `;
+    list.appendChild(row);
+
+    row.querySelector('.bound-cp').addEventListener('input',e=>{
+      cfg.color=e.target.value;
+      row.querySelector('.bound-swatch').style.background=cfg.color;
+      if(zoneLayers[cfg.id]) zoneLayers[cfg.id].setStyle({color:cfg.color,fillColor:cfg.color});
+    });
+
+    const tog=row.querySelector('.lc-toggle');
+    tog.addEventListener('click',async()=>{
+      if(!zoneOn[cfg.id]){
+        if(!zoneLayers[cfg.id]){
+          setLoading(true,`โหลด${cfg.title}...`);
+          try{
+            const buf=await fetchWithProgress(`${cfg.file}?v=${DATA_VERSION}`,setLoadingProgress);
+            const gj=JSON.parse(new TextDecoder('utf-8').decode(buf));
+            zoneData[cfg.id]=gj.features.map(f=>({props:f.properties,polys:geomPolys(f.geometry),bbox:geomBbox(f.geometry)}));
+            zoneLayers[cfg.id]=L.geoJSON(gj,{
+              style:{color:cfg.color,weight:1.2,opacity:0.9,fillColor:cfg.color,fillOpacity:cfg.fillOpacity},
+              onEachFeature:(f,layer)=>{
+                layer.bindTooltip(cfg.info(f.properties)[0]||cfg.title,{sticky:true});
+              }
+            });
+          }catch(e){ alert(`ไม่พบไฟล์ ${cfg.file}`); return; } finally{ setLoading(false); }
+        }
+        zoneOn[cfg.id]=true;
+        zoneLayers[cfg.id].addTo(map);
+        tog.classList.add('on');
+        reorderBoundLayers(); // keep admin lines (and their hover) above the fills
+      }else{
+        zoneOn[cfg.id]=false;
+        map.removeLayer(zoneLayers[cfg.id]);
+        tog.classList.remove('on');
+      }
+    });
+  });
+}
+
+// GeoJSON Polygon/MultiPolygon -> array of polygons (each = array of rings of [lng,lat])
+function geomPolys(g){ return g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[]; }
+function geomBbox(g){
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  geomPolys(g).forEach(p=>p[0].forEach(([x,y])=>{x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);}));
+  return [x0,y0,x1,y1];
+}
+function ringHas(ring,x,y){
+  let inside=false;
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const[xi,yi]=ring[i],[xj,yj]=ring[j];
+    if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi) inside=!inside;
+  }
+  return inside;
+}
+// first ring is the outer boundary, the rest are holes
+function polyHas(poly,x,y){ return ringHas(poly[0],x,y)&&!poly.slice(1).some(r=>ringHas(r,x,y)); }
+
+// rows for the grid popup: every switched-on zone feature containing the point
+function zoneHits(latlng){
+  const x=latlng.lng,y=latlng.lat,rows=[];
+  ZONES.forEach(cfg=>{
+    if(!zoneOn[cfg.id]||!zoneData[cfg.id]) return;
+    zoneData[cfg.id].forEach(z=>{
+      const[x0,y0,x1,y1]=z.bbox;
+      if(x<x0||x>x1||y<y0||y>y1||!z.polys.some(p=>polyHas(p,x,y))) return;
+      const lines=cfg.info(z.props).filter(Boolean);
+      if(z.props.rai!=null) lines.push(`พื้นที่ ${Number(z.props.rai).toLocaleString('th-TH',{maximumFractionDigits:0})} ไร่`);
+      rows.push(`<tr><td class="gp-field"><span class="badge" style="background:${cfg.color}"><span class="badge-dot"></span>${cfg.title}</span></td>
+        <td style="font-size:12px">${lines.join('<br>')}</td></tr>`);
+    });
+  });
+  return rows.length?`<div class="gp-suit-box"><table class="gp-table gp-table-sm">${rows.join('')}</table></div>`:'';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Grid attribute lookup (HTTP Range request)
 // ─────────────────────────────────────────────────────────────────────────────
 let gridMeta=null;
@@ -1498,7 +1604,7 @@ async function handleGridClick(e){
   if(!d||allZero){
     L.popup({className:'dark-popup'}).setLatLng(e.latlng)
      .setContent(`<div class="gpopup-wrap"><div class="gpopup-title">กริด 200m</div>
-       <span style="color:#556;font-size:12px">ไม่มีข้อมูลในพื้นที่นี้</span></div>`)
+       <span style="color:#556;font-size:12px">ไม่มีข้อมูลในพื้นที่นี้</span>${zoneHits(e.latlng)}</div>`)
      .openOn(map);
     if(cellRect){map.removeLayer(cellRect);cellRect=null;}
     return;
@@ -1530,6 +1636,7 @@ async function handleGridClick(e){
         <tr><td class="gp-field">ระดับความเหมาะสม อุตสาหกรรม</td><td>${mkBadge(d.Ind2,WO_CLR,WO_LBL)}</td></tr>
       </table>
     </div>
+    ${zoneHits(e.latlng)}
   </div>`;
   L.popup({maxWidth:380,autoPan:true}).setLatLng(e.latlng).setContent(html).openOn(map);
 }
@@ -1616,6 +1723,8 @@ const TUTORIAL_STEPS=[
     body:'เปิดใช้งานแล้วลากเส้นแบ่งกลางแผนที่ เพื่อเทียบความเหมาะสมรวมหรือความสอดคล้อง ระหว่าง Natural Breaks กับ Manual Interval' },
   { target:'#bound-list', title:'เขตการปกครอง',
     body:'เปิดเส้นขอบเขตจังหวัด/อำเภอ/ตำบล แล้ววางเมาส์หรือคลิก เพื่อดูสัดส่วนพื้นที่แต่ละประเภทในเขตนั้น' },
+  { target:'#zone-list', title:'พื้นที่จัดที่ดิน',
+    body:'แสดงพื้นที่ คทช. ในเขตป่าสงวนแห่งชาติ และเขตปฏิรูปที่ดิน (สปก.) ในภาคใต้ เปิดแล้วคลิกบนแผนที่ ป๊อปอัปจะบอกว่าจุดนั้นอยู่ในแปลงไหน' },
   { target:'.grid-info-box', title:'ข้อมูลกริด 200 เมตร',
     body:'คลิกที่ใดก็ได้บนแผนที่ เพื่อดูข้อมูลของกริดจุดนั้นแบบละเอียด' },
 ];
@@ -1700,6 +1809,7 @@ window.addEventListener('resize',()=>{
 (async()=>{
   buildSidebar();
   buildBoundList();
+  buildZoneList();
   buildSwipeControls();
   setLoading(false);
   await initGrid();
