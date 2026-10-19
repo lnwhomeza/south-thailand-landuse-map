@@ -83,6 +83,8 @@ body{display:flex}
 }
 .base-pill.active,.base-pill:hover{background:var(--accent);border-color:var(--accent);color:#fff}
 .base-pill input{display:none}
+#base-wrap{flex-wrap:wrap}
+#base-wrap .base-pill{flex:1 1 calc(50% - 3px)}
 
 /* ══════════════ Layer card ══════════════ */
 .layer-card{
@@ -479,6 +481,7 @@ body{display:flex}
       <label class="base-pill active"><input type="radio" name="base" value="osm" checked>🗺 OSM</label>
       <label class="base-pill"><input type="radio" name="base" value="carto">🌑 Dark</label>
       <label class="base-pill"><input type="radio" name="base" value="sat">🛰 Satellite</label>
+      <label class="base-pill"><input type="radio" name="base" value="longdo">🛣 Longdo</label>
     </div>
 
     <!-- Raster layers (injected by JS) -->
@@ -730,6 +733,7 @@ sbToggle.addEventListener('click',()=>{
 });
 sbBackdrop.addEventListener('click',closeSidebar);
 
+const LONGDO_KEY='';
 const baseTiles={
   osm:   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
            {attribution:'© OpenStreetMap',maxZoom:19}),
@@ -737,6 +741,10 @@ const baseTiles={
            {attribution:'© CartoDB',maxZoom:19}),
   sat:   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
            {attribution:'© Esri',maxZoom:19}),
+  // Longdo Map (Thai road names/numbers) via its MapProxy WMTS REST endpoint,
+  // standard XYZ tiling (matrix 00 = zoom 0). Key from Longdo Console.
+  longdo:L.tileLayer(`https://ms.longdo.com/mapproxy/wmts/longdo_icons/GLOBAL_WEBMERCATOR/{z}/{x}/{y}.png${LONGDO_KEY?'?key='+LONGDO_KEY:''}`,
+           {attribution:'© <a href="https://map.longdo.com/terms" target="_blank">Longdo Map</a>',maxZoom:19}),
 };
 baseTiles.osm.addTo(map);
 
