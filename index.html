@@ -513,6 +513,10 @@ body{display:flex}
     <div class="sec-hd">พื้นที่จัดที่ดิน</div>
     <div id="zone-list"></div>
 
+    <!-- Highways (DOH, gaps filled from OSM) -->
+    <div class="sec-hd">คมนาคม</div>
+    <div id="road-list"></div>
+
     <!-- Grid info -->
     <div class="sec-hd">Grid 200m</div>
     <div class="grid-info-box">
@@ -568,7 +572,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 42;
+const DATA_VERSION = 43;
 
 // Score type is fixed to raw only (Normalize removed). Method (Natural
 // Breaks vs Manual) is restored -- combine into one of 2 datasets
@@ -1317,6 +1321,68 @@ function buildZoneList(){
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Highways: กรมทางหลวง control sections (highways/south.shp), South only.
+//  Gaps (mostly municipal stretches DOH doesn't draw) filled from OSM and
+//  drawn dashed (s:'O'); DOH lines solid (s:'D').
+// ─────────────────────────────────────────────────────────────────────────────
+const ROAD_CFG={ title:'ทางหลวงแผ่นดิน', file:'data/roads_highway.geojson', color:'#c0392b' };
+let roadLayer=null, roadOn=false;
+
+function buildRoadList(){
+  const cfg=ROAD_CFG;
+  const row=document.createElement('div');
+  row.className='bound-row';
+  row.innerHTML=`
+    <label class="bound-swatch-wrap" title="คลิกเพื่อเปลี่ยนสีเส้น">
+      <span class="bound-swatch" style="background:${cfg.color}"></span>
+      <input type="color" value="${cfg.color}" class="bound-cp">
+    </label>
+    <span class="bound-name">${cfg.title}</span>
+    <div class="lc-toggle"></div>
+  `;
+  document.getElementById('road-list').appendChild(row);
+  row.querySelector('.bound-cp').addEventListener('input',e=>{
+    cfg.color=e.target.value;
+    row.querySelector('.bound-swatch').style.background=cfg.color;
+    if(roadLayer) roadLayer.setStyle({color:cfg.color});
+  });
+  const tog=row.querySelector('.lc-toggle');
+  tog.addEventListener('click',async()=>{
+    if(!roadOn){
+      if(!roadLayer){
+        setLoading(true,`โหลด${cfg.title}...`);
+        try{
+          const buf=await fetchWithProgress(`${cfg.file}?v=${DATA_VERSION}`,setLoadingProgress);
+          const gj=JSON.parse(new TextDecoder('utf-8').decode(buf));
+          roadLayer=L.geoJSON(gj,{
+            style:f=>({color:cfg.color,weight:2.6,opacity:0.9,dashArray:f.properties.s==='O'?'6 5':null}),
+            onEachFeature:(f,layer)=>{
+              const p=f.properties;
+              layer.bindTooltip(`<b>ทางหลวงหมายเลข ${p.n}</b> ${p.rn||''}`+
+                (p.sec?`<br>ตอน ${p.sec}`:'')+
+                (p.s==='O'?'<br><i>ช่วงเติมจาก OpenStreetMap (ไม่มีในข้อมูลกรมทางหลวง)</i>':''),{sticky:true});
+            }
+          });
+        }catch(e){ alert(`ไม่พบไฟล์ ${cfg.file}`); return; } finally{ setLoading(false); }
+      }
+      roadOn=true;
+      roadLayer.addTo(map);
+      tog.classList.add('on');
+      reorderBoundLayers();
+    }else{
+      roadOn=false;
+      map.removeLayer(roadLayer);
+      tog.classList.remove('on');
+    }
+  });
+  const note=document.createElement('div');
+  note.className='grid-hint';
+  note.style.padding='0 18px 8px';
+  note.innerHTML='เส้นทึบ = กรมทางหลวง · เส้นประ = เติมจาก OSM';
+  document.getElementById('road-list').appendChild(note);
+}
+
 // GeoJSON Polygon/MultiPolygon -> array of polygons (each = array of rings of [lng,lat])
 function geomPolys(g){ return g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[]; }
 function geomBbox(g){
@@ -1735,6 +1801,8 @@ const TUTORIAL_STEPS=[
     body:'เปิดเส้นขอบเขตจังหวัด/อำเภอ/ตำบล แล้ววางเมาส์หรือคลิก เพื่อดูสัดส่วนพื้นที่แต่ละประเภทในเขตนั้น' },
   { target:'#zone-list', title:'พื้นที่จัดที่ดิน',
     body:'แสดงพื้นที่ คทช., ป่าสงวนแห่งชาติ และเขตปฏิรูปที่ดิน (สปก.) ในภาคใต้ เปิดแล้วคลิกบนแผนที่ ป๊อปอัปจะบอกว่าจุดนั้นอยู่ในแปลงไหน' },
+  { target:'#road-list', title:'ทางหลวงแผ่นดิน',
+    body:'โครงข่ายทางหลวงแผ่นดินภาคใต้จากกรมทางหลวง (เส้นทึบ) ช่วงที่กรมทางหลวงไม่มีข้อมูล เช่น ช่วงผ่านเขตเทศบาล เติมจาก OpenStreetMap (เส้นประ) เอาเมาส์ชี้เพื่อดูหมายเลขทางหลวงและชื่อตอน' },
   { target:'.grid-info-box', title:'ข้อมูลกริด 200 เมตร',
     body:'คลิกที่ใดก็ได้บนแผนที่ เพื่อดูข้อมูลของกริดจุดนั้นแบบละเอียด' },
 ];
@@ -1820,6 +1888,7 @@ window.addEventListener('resize',()=>{
   buildSidebar();
   buildBoundList();
   buildZoneList();
+  buildRoadList();
   buildSwipeControls();
   setLoading(false);
   await initGrid();
