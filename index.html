@@ -513,10 +513,6 @@ body{display:flex}
     <div class="sec-hd">พื้นที่จัดที่ดิน</div>
     <div id="zone-list"></div>
 
-    <!-- Highways (DOH, gaps filled from OSM) -->
-    <div class="sec-hd">คมนาคม</div>
-    <div id="road-list"></div>
-
     <!-- Grid info -->
     <div class="sec-hd">Grid 200m</div>
     <div class="grid-info-box">
@@ -572,7 +568,7 @@ body{display:flex}
 // Bump this whenever any file under data/ changes -- forces browsers/CDN to
 // fetch fresh bytes instead of silently reusing a cached copy of the same URL
 // (this is exactly what caused a just-pushed data fix to still look broken).
-const DATA_VERSION = 45;
+const DATA_VERSION = 46;
 
 // Score type is fixed to raw only (Normalize removed). Method (Natural
 // Breaks vs Manual) is restored -- combine into one of 2 datasets
@@ -1254,16 +1250,17 @@ function buildBoundList(){
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Land allocation zones -- filled polygons, South only.
-//  คทช. = AREA_NLB (all land types, มติ ครม. 22 ธ.ค. 2558); ป่าสงวนแห่งชาติ =
-//  AREA_NLB_G3 (มติ ครม. 26 พ.ย. 2561); สปก. = ALRO_South (one polygon per province).
+//  คทช. = AREA_NLB (all land types, มติ ครม. 22 ธ.ค. 2558); ป่าอนุรักษ์ =
+//  L10_ProtectedArea_MNRE_50k (type from pro_id: 1 NP, 2 WS, 3 non-hunting,
+//  4 forest park); สปก. = ALRO_South (one polygon per province).
 //  Clicks bubble to the map so the grid popup still opens; the popup then
 //  lists whichever loaded zones contain the clicked point (zoneHits).
 // ─────────────────────────────────────────────────────────────────────────────
 const ZONES=[
   { id:'knc', title:'พื้นที่ คทช.', file:'data/zone_knc.geojson', color:'#8e44ad', fillOpacity:0.30,
     info:p=>[p.name, p.type, p.res, p.phase&&p.phase.replace('Phase_','ระยะที่ '), p.cert&&`หนังสืออนุญาต ${p.cert}`] },
-  { id:'forest', title:'ป่าสงวนแห่งชาติ', file:'data/zone_forest_reserve.geojson', color:'#0b7a3e', fillOpacity:0.25,
-    info:p=>[p.name, p.res, p.phase&&p.phase.replace('Phase_','ระยะที่ '), p.cert&&`หนังสืออนุญาต ${p.cert}`] },
+  { id:'conserve', title:'ป่าอนุรักษ์', file:'data/zone_conservation.geojson', color:'#0b7a3e', fillOpacity:0.25,
+    info:p=>[`${p.kind} ${p.name}`] },
   { id:'alro', title:'เขตปฏิรูปที่ดิน (สปก.)', file:'data/zone_alro.geojson', color:'#e67e22', fillOpacity:0.25,
     info:p=>[`สปก. ${p.name}`] },
 ];
@@ -1319,79 +1316,6 @@ function buildZoneList(){
       }
     });
   });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Highways: กรมทางหลวง control sections (highways/south.shp), South only.
-//  Gaps (mostly municipal stretches DOH doesn't draw) filled from OSM and
-//  drawn dashed (s:'O'); DOH lines solid (s:'D').
-// ─────────────────────────────────────────────────────────────────────────────
-// ทางหลวงชนบท = DRR FeatureServer (gis.drr.go.th, updated 2025), South only.
-const ROADS=[
-  { id:'hwy', title:'ทางหลวงแผ่นดิน', file:'data/roads_highway.geojson', color:'#c0392b', weight:2.6,
-    dash:p=>p.s==='O'?'6 5':null,
-    tip:p=>!p.n?(p.s==='O'?'เส้นเชื่อมจาก OpenStreetMap':'เส้นเชื่อมปลายถนน'):`<b>ทางหลวงหมายเลข ${p.n}</b> ${p.rn||''}`+(p.sec?`<br>ตอน ${p.sec}`:'')+
-      (p.s==='O'?'<br><i>ช่วงเติมจาก OpenStreetMap (ไม่มีในข้อมูลกรมทางหลวง)</i>':''),
-    note:'เส้นทึบ = กรมทางหลวง · เส้นประ = เติมจาก OSM' },
-  { id:'rural', title:'ทางหลวงชนบท (ทช.)', file:'data/roads_rural.geojson', color:'#1f6fb2', weight:1.8,
-    dash:p=>p.s==='O'?'5 4':null,
-    tip:p=>!p.c?(p.s==='O'?'เส้นเชื่อมจาก OpenStreetMap':'เส้นเชื่อมปลายถนน'):`<b>${p.c}</b> ${p.n||''}`+(p.km?`<br>ระยะทาง ${p.km} กม.`:''),
-    note:'กรมทางหลวงชนบท (ข้อมูลปี 2568)' },
-];
-const roadLayers={}, roadOn={};
-
-function buildRoadList(){
-  const list=document.getElementById('road-list');
-  ROADS.forEach(cfg=>{
-    roadOn[cfg.id]=false;
-    const row=document.createElement('div');
-    row.className='bound-row';
-    row.title=cfg.note;
-    row.innerHTML=`
-      <label class="bound-swatch-wrap" title="คลิกเพื่อเปลี่ยนสีเส้น">
-        <span class="bound-swatch" style="background:${cfg.color}"></span>
-        <input type="color" value="${cfg.color}" class="bound-cp">
-      </label>
-      <span class="bound-name">${cfg.title}</span>
-      <div class="lc-toggle"></div>
-    `;
-    list.appendChild(row);
-    row.querySelector('.bound-cp').addEventListener('input',e=>{
-      cfg.color=e.target.value;
-      row.querySelector('.bound-swatch').style.background=cfg.color;
-      if(roadLayers[cfg.id]) roadLayers[cfg.id].setStyle({color:cfg.color});
-    });
-    const tog=row.querySelector('.lc-toggle');
-    tog.addEventListener('click',async()=>{
-      if(!roadOn[cfg.id]){
-        if(!roadLayers[cfg.id]){
-          setLoading(true,`โหลด${cfg.title}...`);
-          try{
-            const buf=await fetchWithProgress(`${cfg.file}?v=${DATA_VERSION}`,setLoadingProgress);
-            const gj=JSON.parse(new TextDecoder('utf-8').decode(buf));
-            roadLayers[cfg.id]=L.geoJSON(gj,{
-              style:f=>({color:cfg.color,weight:cfg.weight,opacity:0.9,dashArray:cfg.dash(f.properties)}),
-              onEachFeature:(f,layer)=>layer.bindTooltip(cfg.tip(f.properties),{sticky:true})
-            });
-          }catch(e){ alert(`ไม่พบไฟล์ ${cfg.file}`); return; } finally{ setLoading(false); }
-        }
-        roadOn[cfg.id]=true;
-        roadLayers[cfg.id].addTo(map);
-        if(roadOn.hwy) roadLayers.hwy.bringToFront(); // highways drawn over rural roads
-        tog.classList.add('on');
-        reorderBoundLayers();
-      }else{
-        roadOn[cfg.id]=false;
-        map.removeLayer(roadLayers[cfg.id]);
-        tog.classList.remove('on');
-      }
-    });
-  });
-  const note=document.createElement('div');
-  note.className='grid-hint';
-  note.style.padding='0 18px 8px';
-  note.innerHTML='เส้นทึบ = ข้อมูลทางการ (ทล./ทช.) · เส้นประ = เติม/เชื่อมจาก OSM';
-  list.appendChild(note);
 }
 
 // GeoJSON Polygon/MultiPolygon -> array of polygons (each = array of rings of [lng,lat])
@@ -1811,9 +1735,7 @@ const TUTORIAL_STEPS=[
   { target:'#bound-list', title:'เขตการปกครอง',
     body:'เปิดเส้นขอบเขตจังหวัด/อำเภอ/ตำบล แล้ววางเมาส์หรือคลิก เพื่อดูสัดส่วนพื้นที่แต่ละประเภทในเขตนั้น' },
   { target:'#zone-list', title:'พื้นที่จัดที่ดิน',
-    body:'แสดงพื้นที่ คทช., ป่าสงวนแห่งชาติ และเขตปฏิรูปที่ดิน (สปก.) ในภาคใต้ เปิดแล้วคลิกบนแผนที่ ป๊อปอัปจะบอกว่าจุดนั้นอยู่ในแปลงไหน' },
-  { target:'#road-list', title:'คมนาคม',
-    body:'ทางหลวงแผ่นดินจากกรมทางหลวง (เส้นทึบ) ช่วงที่ไม่มีข้อมูล เช่น ผ่านเขตเทศบาล เติมจาก OpenStreetMap (เส้นประ) และทางหลวงชนบทจากกรมทางหลวงชนบท เอาเมาส์ชี้เพื่อดูหมายเลขและชื่อสายทาง' },
+    body:'แสดงพื้นที่ คทช., ป่าอนุรักษ์ (อุทยานแห่งชาติ เขตรักษาพันธุ์สัตว์ป่า เขตห้ามล่าสัตว์ป่า วนอุทยาน) และเขตปฏิรูปที่ดิน (สปก.) ในภาคใต้ เปิดแล้วคลิกบนแผนที่ ป๊อปอัปจะบอกว่าจุดนั้นอยู่ในแปลงไหน' },
   { target:'.grid-info-box', title:'ข้อมูลกริด 200 เมตร',
     body:'คลิกที่ใดก็ได้บนแผนที่ เพื่อดูข้อมูลของกริดจุดนั้นแบบละเอียด' },
 ];
@@ -1899,7 +1821,6 @@ window.addEventListener('resize',()=>{
   buildSidebar();
   buildBoundList();
   buildZoneList();
-  buildRoadList();
   buildSwipeControls();
   setLoading(false);
   await initGrid();
